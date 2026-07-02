@@ -61,7 +61,7 @@ export default function ProductCard({
         </div>
 
         {/* Action icons top-right */}
-        <div className="absolute top-2.5 right-2.5 z-10 flex flex-col gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+        <div className="hidden sm:flex absolute top-2.5 right-2.5 z-10 flex-col gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
           <button
             onClick={(e) => onShare(product, e)}
             className="w-8 h-8 rounded-full bg-white hover:bg-gray-100 border border-gray-200 flex items-center justify-center text-gray-700 shadow transition"
@@ -93,9 +93,9 @@ export default function ProductCard({
       </div>
 
       {/* Info Content Area */}
-      <div className="p-4 flex-1 flex flex-col text-left">
+      <div className="p-2 sm:p-4 flex-1 flex flex-col text-left">
         {/* Brand & Category badges */}
-        <div className="flex items-center gap-1.5 mb-1 flex-wrap">
+        <div className="hidden sm:flex items-center gap-1.5 mb-1 flex-wrap">
           <span className="text-[10px] font-bold text-[#007185] bg-sky-50 px-1.5 py-0.5 rounded uppercase">
             {brandName}
           </span>
@@ -105,51 +105,52 @@ export default function ProductCard({
         </div>
 
         {/* Product Name */}
-        <h3 className="font-semibold text-sm text-[#0F1111] line-clamp-2 leading-snug group-hover:text-[#007185] transition-colors mb-1 min-h-[40px]">
+        <h3 className="font-medium sm:font-semibold text-xs sm:text-sm text-[#0F1111] line-clamp-2 leading-snug group-hover:text-[#007185] transition-colors mb-1 min-h-[34px] sm:min-h-[40px]">
           {product.name}
         </h3>
 
         {/* SKU Label */}
-        <div className="text-[11px] font-mono text-gray-400 mb-2">
+        <div className="hidden sm:block text-[11px] font-mono text-gray-400 mb-2">
           SKU: <span className="font-bold text-gray-600">{product.sku}</span>
         </div>
 
         {/* Rating Stars */}
-        <div className="flex items-center gap-1 mb-3">
+        <div className="flex items-center gap-1 mb-1 sm:mb-3">
           <div className="flex text-[#FF9900]">
             {[...Array(5)].map((_, i) => (
               <Star 
                 key={i} 
-                className={`w-3.5 h-3.5 ${i < ratingStars ? 'fill-current' : 'text-gray-200'}`} 
+                className={`w-3 sm:w-3.5 h-3 sm:h-3.5 ${i < ratingStars ? 'fill-current' : 'text-gray-200'}`} 
               />
             ))}
           </div>
-          <span className="text-[10px] font-bold text-[#007185] hover:underline">
+          <span className="hidden sm:inline text-[10px] font-bold text-[#007185] hover:underline">
             {ratingCount} calificaciones
           </span>
         </div>
 
         {/* Price display - Amazon style */}
-        <div className="mt-auto pt-2 border-t border-gray-100 flex items-baseline justify-between flex-wrap gap-1">
+        <div className="mt-auto pt-1 sm:pt-2 border-t border-gray-100 flex items-baseline justify-between flex-wrap gap-1">
           <div>
             {product.offer_price ? (
               <div className="flex flex-col">
-                <span className="text-[11px] text-red-600 font-bold uppercase tracking-wider">Oferta</span>
+                <span className="hidden sm:block text-[11px] text-red-600 font-bold uppercase tracking-wider">Oferta</span>
                 <div className="flex items-baseline gap-1.5">
-                  <span className="text-lg font-black text-[#0F1111]">${product.offer_price.toFixed(2)}</span>
-                  <span className="text-xs text-gray-400 line-through">${product.price.toFixed(2)}</span>
+                  <span className="text-sm sm:text-lg font-black text-[#0F1111]">${product.offer_price.toFixed(2)}</span>
+                  <span className="text-[10px] sm:text-xs text-gray-400 line-through">${product.price.toFixed(2)}</span>
                 </div>
               </div>
             ) : (
               <div className="flex flex-col">
-                <span className="text-[11px] text-gray-400 font-bold uppercase tracking-wider">Precio</span>
-                <span className="text-lg font-black text-[#0F1111]">${product.price.toFixed(2)}</span>
+                <span className="hidden sm:block text-[11px] text-gray-400 font-bold uppercase tracking-wider">Precio</span>
+                <span className="text-sm sm:text-lg font-black text-[#0F1111]">${product.price.toFixed(2)}</span>
               </div>
             )}
+            <span className="text-[10px] font-bold text-[#00A650] block mt-0.5">Envío gratis</span>
           </div>
 
           {/* Stock state badge */}
-          <div>
+          <div className="hidden sm:block">
             {product.stock > 15 ? (
               <span className="text-[10px] font-bold text-emerald-600 flex items-center gap-1 bg-emerald-50 px-1.5 py-0.5 rounded">
                 <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
@@ -170,7 +171,7 @@ export default function ProductCard({
       </div>
 
       {/* Card CTA Footer Buttons */}
-      <div className="px-4 pb-4 pt-1 flex flex-col gap-2 mt-auto">
+      <div className="hidden sm:flex px-4 pb-4 pt-1 flex-col gap-2 mt-auto">
         <button
           onClick={(e) => {
             e.stopPropagation();
