@@ -138,7 +138,7 @@ export default function App() {
   const handleWhatsAppQuery = (product: Product, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
     
-    const phoneNumber = '584247654321'; // Default Venezuela Barinitas contact phone
+    const phoneNumber = '584123921941'; // Default Venezuela Barinitas contact phone
     const formattedPrice = product.offer_price ? `$${product.offer_price.toFixed(2)} USD (Precio Oferta)` : `$${product.price.toFixed(2)} USD`;
     const message = `Hola Copias Bella Vista, estoy interesado en el siguiente artículo de su catálogo online:
       
@@ -285,15 +285,17 @@ export default function App() {
           /* PUBLIC MARKETPLACE VIEW */
           <>
             {/* Header Banner */}
-            <Banner 
-              onSelectCategoryByName={handleSelectCategoryByName}
-              setOnlyOffers={setOnlyOffers}
-            />
+            <div className="hidden lg:block">
+              <Banner 
+                onSelectCategoryByName={handleSelectCategoryByName}
+                setOnlyOffers={setOnlyOffers}
+              />
+            </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
               
               {/* Left Column: Filter Sidebar */}
-              <div className="lg:col-span-1">
+              <div className="hidden lg:block lg:col-span-1">
                 <Sidebar
                   categories={categories}
                   brands={brands}
@@ -364,7 +366,7 @@ export default function App() {
                   </div>
                 ) : (
                   /* Standard Grid */
-                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
+                  <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-6">
                     {filteredProducts.map((product) => {
                       const category = categories.find(c => c.id === product.category_id);
                       const brand = brands.find(b => b.id === product.brand_id);
@@ -399,7 +401,7 @@ export default function App() {
         <button
           onClick={() => {
             const encoded = encodeURIComponent("Hola Copias Bella Vista, me gustaría realizar una consulta sobre sus servicios.");
-            window.open(`https://api.whatsapp.com/send?phone=584247654321&text=${encoded}`, '_blank');
+            window.open(`https://api.whatsapp.com/send?phone=584123921941&text=${encoded}`, '_blank');
           }}
           className="w-12 h-12 rounded-full bg-[#25D366] text-white flex items-center justify-center shadow-2xl hover:scale-110 transition cursor-pointer"
           title="Atención directa por WhatsApp"
