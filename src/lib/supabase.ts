@@ -459,6 +459,9 @@ export const dbService = {
     if (supabase && currentSettings.useSupabase) {
       let query = supabase.from('products').select('*', { count: 'exact' });
       
+      // Only active products in public paginated view
+      query = query.eq('active', true);
+
       if (params.searchTerm) {
         query = query.or(`name.ilike.%${params.searchTerm}%,sku.ilike.%${params.searchTerm}%,description.ilike.%${params.searchTerm}%`);
       }
@@ -500,6 +503,7 @@ export const dbService = {
     
     // Fallback to local storage (basic logic)
     let list: Product[] = JSON.parse(localStorage.getItem('bellavista_products') || '[]');
+    list = list.filter(p => p.active);
     if (params.searchTerm) {
       const q = params.searchTerm.toLowerCase();
       list = list.filter(p => p.name.toLowerCase().includes(q) || p.sku.toLowerCase().includes(q) || p.description.toLowerCase().includes(q));
