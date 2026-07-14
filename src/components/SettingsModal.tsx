@@ -14,7 +14,6 @@ interface SettingsModalProps {
 export default function SettingsModal({ onClose }: SettingsModalProps) {
   const [supabaseUrl, setSupabaseUrl] = useState(currentSettings.supabaseUrl);
   const [supabaseAnonKey, setSupabaseAnonKey] = useState(currentSettings.supabaseAnonKey);
-  const [useSupabase, setUseSupabase] = useState(currentSettings.useSupabase);
   const [copiedSql, setCopiedSql] = useState(false);
 
   const handleSave = (e: React.FormEvent) => {
@@ -22,7 +21,7 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
     dbService.saveSettings({
       supabaseUrl: supabaseUrl.trim(),
       supabaseAnonKey: supabaseAnonKey.trim(),
-      useSupabase: useSupabase
+      useSupabase: true
     });
   };
 
@@ -116,25 +115,10 @@ CREATE POLICY "Acceso total para imágenes" ON product_images FOR ALL TO public 
         {/* Content */}
         <div className="p-6 overflow-y-auto flex-1 space-y-6">
           <p className="text-xs text-gray-600 leading-relaxed">
-            Por defecto, la aplicación almacena los productos en el <strong>almacenamiento local (LocalStorage)</strong> de tu navegador para que puedas probar el panel administrativo y catálogo de inmediato sin configuraciones previas. Si deseas usar tu propio proyecto real de Supabase, introduce tus credenciales a continuación.
+            Introduce tus credenciales de Supabase a continuación.
           </p>
 
           <form onSubmit={handleSave} className="space-y-4">
-            {/* Toggle Real connection */}
-            <label className="flex items-center gap-3 p-3 bg-gray-50 border border-gray-200 rounded-lg cursor-pointer">
-              <input
-                type="checkbox"
-                checked={useSupabase}
-                onChange={(e) => setUseSupabase(e.target.checked)}
-                className="w-5 h-5 rounded text-[#FF9900] focus:ring-[#FF9900] accent-[#FF9900]"
-                id="toggle-supabase-active"
-              />
-              <div className="text-left">
-                <span className="text-xs font-black text-gray-800 uppercase block">Activar Base de Datos Supabase</span>
-                <span className="text-[11px] text-gray-400">Si se desmarca, se usará el motor simulado local con datos de prueba.</span>
-              </div>
-            </label>
-
             {/* Supabase URL */}
             <div>
               <label className="block text-xs font-extrabold text-gray-700 uppercase tracking-wide mb-1">
@@ -146,7 +130,6 @@ CREATE POLICY "Acceso total para imágenes" ON product_images FOR ALL TO public 
                 onChange={(e) => setSupabaseUrl(e.target.value)}
                 placeholder="https://your-project.supabase.co"
                 className="w-full bg-white border border-gray-300 rounded px-3 py-2 text-xs focus:ring-2 focus:ring-[#FF9900] focus:outline-none"
-                disabled={!useSupabase}
                 id="input-supabase-url"
               />
             </div>
@@ -162,7 +145,6 @@ CREATE POLICY "Acceso total para imágenes" ON product_images FOR ALL TO public 
                 onChange={(e) => setSupabaseAnonKey(e.target.value)}
                 placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
                 className="w-full bg-white border border-gray-300 rounded px-3 py-2 text-xs font-mono focus:ring-2 focus:ring-[#FF9900] focus:outline-none"
-                disabled={!useSupabase}
                 id="input-supabase-key"
               />
             </div>
