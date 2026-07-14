@@ -753,7 +753,7 @@ export default function AdminPanel({
                       </td>
                       <td className="p-3 text-center">
                         <button
-                          onClick={() => handleToggleFeaturedProduct(prod)}
+                          type="button" onClick={(e) => { e.stopPropagation(); handleToggleFeaturedProduct(prod); }}
                           className="text-gray-400 hover:text-amber-500 transition focus:outline-none"
                         >
                           <Star className={`w-4 h-4 mx-auto ${prod.featured ? 'fill-[#FF9900] text-[#FF9900]' : 'text-gray-300'}`} />
@@ -761,7 +761,7 @@ export default function AdminPanel({
                       </td>
                       <td className="p-3 text-center">
                         <button
-                          onClick={() => handleToggleActiveProduct(prod)}
+                          type="button" onClick={(e) => { e.stopPropagation(); handleToggleActiveProduct(prod); }}
                           className="text-gray-400 hover:text-[#007185] transition"
                         >
                           {prod.active ? (
@@ -773,14 +773,14 @@ export default function AdminPanel({
                       </td>
                       <td className="p-3 text-right space-x-1.5 whitespace-nowrap">
                         <button
-                          onClick={() => handleOpenProductForm(prod)}
+                          type="button" onClick={(e) => { e.stopPropagation(); handleOpenProductForm(prod); }}
                           className="p-1 text-sky-600 hover:bg-sky-50 rounded border border-transparent hover:border-sky-200 transition cursor-pointer inline-flex items-center"
                           title="Editar"
                         >
                           <Edit3 className="w-3.5 h-3.5" />
                         </button>
                         <button
-                          onClick={() => handleDeleteProduct(prod.id)}
+                          type="button" onClick={(e) => { e.stopPropagation(); handleDeleteProduct(prod.id); }}
                           className="p-1 text-red-600 hover:bg-red-50 rounded border border-transparent hover:border-red-200 transition cursor-pointer inline-flex items-center"
                           title="Eliminar"
                           disabled={activeRole === 'vendedor'}
