@@ -32,6 +32,8 @@ export interface Product {
   featured: boolean;
   active: boolean;
   technical_sheet_url: string | null;
+  rating_stars?: number;
+  rating_count?: number;
   created_at?: string;
   updated_at?: string;
 }

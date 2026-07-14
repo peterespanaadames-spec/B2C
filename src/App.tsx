@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { 
   Package, LayoutGrid, CheckCircle2, AlertTriangle, 
   Settings, HelpCircle, Phone, ArrowUp, Info, ShieldAlert, Lock
@@ -46,28 +46,31 @@ export default function App() {
   const [onlyOffers, setOnlyOffers] = useState(false);
 
   // Fetch all initial data
-  const loadDatabaseData = async () => {
+  // Pagination states
+  const [page, setPage] = useState(0);
+  const [hasMore, setHasMore] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [totalCount, setTotalCount] = useState(0);
+
+  const observerTarget = useRef<HTMLDivElement>(null);
+
+  const loadGlobalData = async () => {
     try {
-      setLoading(true);
-      const [cats, brs, prods, imgs] = await Promise.all([
+      const [cats, brs, imgs] = await Promise.all([
         dbService.getCategories(),
         dbService.getBrands(),
-        dbService.getProducts(),
         dbService.getProductImages()
       ]);
       setCategories(cats);
       setBrands(brs);
-      setProducts(prods);
       setProductImages(imgs);
     } catch (e) {
       console.error("Error loading application data:", e);
-    } finally {
-      setLoading(false);
     }
   };
 
   useEffect(() => {
-    loadDatabaseData();
+    loadGlobalData();
 
     // Scroll listener for back-to-top button
     const handleScroll = () => {
@@ -76,6 +79,106 @@ export default function App() {
     window.addEventListener('scroll', handleScroll);
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
+
+  // Public View: Fetch paginated products based on filters
+  useEffect(() => {
+    if (isAdminView) return;
+
+    let isMounted = true;
+    const fetchInitialProducts = async () => {
+      setLoading(true);
+      setPage(0);
+      try {
+        const { data, count } = await dbService.getProductsPaginated({
+          page: 0,
+          pageSize: 20,
+          searchTerm,
+          categoryId: selectedCategory,
+          brandId: selectedBrand,
+          onlyAvailable: onlyInStock,
+          onlyFeatured,
+          onlyOffers,
+          minPrice,
+          maxPrice
+        });
+        if (isMounted) {
+          setProducts(data);
+          setTotalCount(count);
+          setHasMore(data.length < count);
+        }
+      } catch (e) {
+        console.error("Error loading products:", e);
+      } finally {
+        if (isMounted) setLoading(false);
+      }
+    };
+    
+    fetchInitialProducts();
+    
+    return () => { isMounted = false; };
+  }, [isAdminView, searchTerm, selectedCategory, selectedBrand, minPrice, maxPrice, onlyInStock, onlyFeatured, onlyOffers]);
+
+  // Load more function
+  const loadMoreProducts = useCallback(async () => {
+    if (loadingMore || !hasMore || loading) return;
+    setLoadingMore(true);
+    try {
+      const nextPage = page + 1;
+      const { data, count } = await dbService.getProductsPaginated({
+        page: nextPage,
+        pageSize: 20,
+        searchTerm,
+        categoryId: selectedCategory,
+        brandId: selectedBrand,
+        onlyAvailable: onlyInStock,
+        onlyFeatured,
+        onlyOffers,
+        minPrice,
+        maxPrice
+      });
+      setProducts(prev => {
+        const newTotal = prev.length + data.length;
+        setHasMore(newTotal < count);
+        return [...prev, ...data];
+      });
+      setPage(nextPage);
+    } catch (e) {
+      console.error("Error loading more products:", e);
+    } finally {
+      setLoadingMore(false);
+    }
+  }, [page, hasMore, loadingMore, loading, searchTerm, selectedCategory, selectedBrand, minPrice, maxPrice, onlyInStock, onlyFeatured, onlyOffers]);
+
+  // IntersectionObserver for infinite scrolling
+  useEffect(() => {
+    if (isAdminView || loading || loadingMore || !hasMore) return;
+    
+    const observer = new IntersectionObserver(
+      entries => {
+        if (entries[0].isIntersecting) {
+          loadMoreProducts();
+        }
+      },
+      { threshold: 0.1 }
+    );
+    
+    if (observerTarget.current) {
+      observer.observe(observerTarget.current);
+    }
+    
+    return () => observer.disconnect();
+  }, [isAdminView, loading, loadingMore, hasMore, loadMoreProducts]);
+
+  // Admin View: Load full inventory
+  useEffect(() => {
+    if (isAdminView) {
+      setLoading(true);
+      dbService.getProducts().then(prods => {
+        setProducts(prods);
+        setLoading(false);
+      });
+    }
+  }, [isAdminView]);
 
   // Keyboard combination shortcut (Ctrl + A + S) to toggle the admin login button visibility
   useEffect(() => {
@@ -138,7 +241,7 @@ export default function App() {
   const handleWhatsAppQuery = (product: Product, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
     
-    const phoneNumber = '584123921941'; // Default Venezuela Barinitas contact phone
+    const phoneNumber = '584125043857'; // Default Venezuela Barinitas contact phone
     const formattedPrice = product.offer_price ? `$${product.offer_price.toFixed(2)} USD (Precio Oferta)` : `$${product.price.toFixed(2)} USD`;
     const message = `Hola Copias Bella Vista, estoy interesado en el siguiente artículo de su catálogo online:
       
@@ -200,47 +303,16 @@ export default function App() {
     }
   };
 
-  // Filtered products list for public UI
-  const filteredProducts = products.filter(p => {
-    // 1. Visiblity active constraint
-    if (!p.active) return false;
-
-    // 2. Global search criteria
-    if (searchTerm.trim() !== '') {
-      const q = searchTerm.toLowerCase();
-      const catName = categories.find(c => c.id === p.category_id)?.name.toLowerCase() || '';
-      const brandName = brands.find(b => b.id === p.brand_id)?.name.toLowerCase() || '';
-      
-      const matchName = p.name.toLowerCase().includes(q);
-      const matchSku = p.sku.toLowerCase().includes(q);
-      const matchDesc = p.description.toLowerCase().includes(q);
-      const matchCat = catName.includes(q);
-      const matchBrand = brandName.includes(q);
-
-      if (!matchName && !matchSku && !matchDesc && !matchCat && !matchBrand) return false;
+  const handleRefreshAdminData = () => {
+    loadGlobalData();
+    if (isAdminView) {
+      setLoading(true);
+      dbService.getProducts().then(prods => {
+        setProducts(prods);
+        setLoading(false);
+      });
     }
-
-    // 3. Category constraint
-    if (selectedCategory !== 'all' && p.category_id !== selectedCategory) return false;
-
-    // 4. Brand constraint
-    if (selectedBrand !== 'all' && p.brand_id !== selectedBrand) return false;
-
-    // 5. Price range constraint
-    const currentPrice = p.offer_price !== null ? p.offer_price : p.price;
-    if (currentPrice < minPrice || currentPrice > maxPrice) return false;
-
-    // 6. Only in stock constraint
-    if (onlyInStock && p.stock === 0) return false;
-
-    // 7. Only featured constraint
-    if (onlyFeatured && !p.featured) return false;
-
-    // 8. Only offers constraint
-    if (onlyOffers && p.offer_price === null) return false;
-
-    return true;
-  });
+  };
 
   return (
     <div className="min-h-screen bg-[#EAEDED] flex flex-col font-sans text-[#0F1111]">
@@ -278,7 +350,7 @@ export default function App() {
             categories={categories}
             brands={brands}
             productImages={productImages}
-            onRefreshData={loadDatabaseData}
+            onRefreshData={handleRefreshAdminData}
             activeRole={activeRole}
           />
         ) : (
@@ -320,7 +392,7 @@ export default function App() {
                 {/* Result header count */}
                 <div className="bg-white p-3.5 rounded-lg border border-gray-200 shadow-sm flex justify-between items-center mb-4">
                   <span className="text-xs font-bold uppercase tracking-wider text-gray-500">
-                    Resultados encontrados: <span className="text-[#0F1111] font-black">{filteredProducts.length} artículos</span>
+                    Resultados encontrados: <span className="text-[#0F1111] font-black">{totalCount} artículos</span>
                   </span>
                   
                   {/* Active filters count summary badges */}
@@ -345,11 +417,21 @@ export default function App() {
 
                 {/* Loading indicator */}
                 {loading ? (
-                  <div className="py-24 text-center flex flex-col items-center justify-center gap-3">
-                    <div className="w-10 h-10 border-4 border-[#FF9900] border-t-transparent rounded-full animate-spin"></div>
-                    <p className="text-sm text-gray-500 font-bold uppercase tracking-wide">Cargando catálogo Copias Bella Vista...</p>
+                  <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-6">
+                    {/* Skeletons para carga inicial */}
+                    {[...Array(8)].map((_, i) => (
+                      <div key={`skeleton-${i}`} className="bg-white rounded-lg shadow border border-gray-100 overflow-hidden flex flex-col h-[320px] animate-pulse">
+                        <div className="h-40 bg-gray-200"></div>
+                        <div className="p-3 flex-1 flex flex-col gap-2">
+                          <div className="h-3 bg-gray-200 w-1/3 rounded"></div>
+                          <div className="h-4 bg-gray-200 w-3/4 rounded"></div>
+                          <div className="h-4 bg-gray-200 w-1/2 rounded mb-auto"></div>
+                          <div className="h-6 bg-gray-200 w-1/4 rounded mt-4"></div>
+                        </div>
+                      </div>
+                    ))}
                   </div>
-                ) : filteredProducts.length === 0 ? (
+                ) : products.length === 0 ? (
                   /* Empty state */
                   <div className="bg-white p-16 rounded-lg border border-gray-200 text-center shadow-sm flex flex-col items-center justify-center max-w-xl mx-auto my-6">
                     <Package className="w-12 h-12 text-[#FF9900] mb-4" />
@@ -366,28 +448,46 @@ export default function App() {
                   </div>
                 ) : (
                   /* Standard Grid */
-                  <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-6">
-                    {filteredProducts.map((product) => {
-                      const category = categories.find(c => c.id === product.category_id);
-                      const brand = brands.find(b => b.id === product.brand_id);
-                      const associatedImages = productImages
-                        .filter(img => img.product_id === product.id)
-                        .map(img => img.image_url);
+                  <>
+                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-6">
+                      {products.map((product) => {
+                        const category = categories.find(c => c.id === product.category_id);
+                        const brand = brands.find(b => b.id === product.brand_id);
+                        const associatedImages = productImages
+                          .filter(img => img.product_id === product.id)
+                          .map(img => img.image_url);
 
-                      return (
-                        <ProductCard
-                          key={product.id}
-                          product={product}
-                          categoryName={category?.name || 'General'}
-                          brandName={brand?.name || 'S/M'}
-                          images={associatedImages}
-                          onViewDetails={(p) => setSelectedProduct(p)}
-                          onShare={(p, e) => handleShareProduct(p, e)}
-                          onWhatsAppQuery={(p, e) => handleWhatsAppQuery(p, e)}
-                        />
-                      );
-                    })}
-                  </div>
+                        return (
+                          <ProductCard
+                            key={product.id}
+                            product={product}
+                            categoryName={category?.name || 'General'}
+                            brandName={brand?.name || 'S/M'}
+                            images={associatedImages}
+                            onViewDetails={(p) => setSelectedProduct(p)}
+                            onShare={(p, e) => handleShareProduct(p, e)}
+                            onWhatsAppQuery={(p, e) => handleWhatsAppQuery(p, e)}
+                          />
+                        );
+                      })}
+                      
+                      {/* Skeletons para carga al hacer scroll */}
+                      {loadingMore && [...Array(4)].map((_, i) => (
+                        <div key={`more-skeleton-${i}`} className="bg-white rounded-lg shadow border border-gray-100 overflow-hidden flex flex-col h-[320px] animate-pulse">
+                          <div className="h-40 bg-gray-200"></div>
+                          <div className="p-3 flex-1 flex flex-col gap-2">
+                            <div className="h-3 bg-gray-200 w-1/3 rounded"></div>
+                            <div className="h-4 bg-gray-200 w-3/4 rounded"></div>
+                            <div className="h-4 bg-gray-200 w-1/2 rounded mb-auto"></div>
+                            <div className="h-6 bg-gray-200 w-1/4 rounded mt-4"></div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Sentinel para Intersection Observer */}
+                    <div id="scroll-sentinel" ref={observerTarget} className="h-10 mt-4 w-full"></div>
+                  </>
                 )}
               </div>
 
@@ -401,7 +501,7 @@ export default function App() {
         <button
           onClick={() => {
             const encoded = encodeURIComponent("Hola Copias Bella Vista, me gustaría realizar una consulta sobre sus servicios.");
-            window.open(`https://api.whatsapp.com/send?phone=584123921941&text=${encoded}`, '_blank');
+            window.open(`https://api.whatsapp.com/send?phone=584125043857&text=${encoded}`, '_blank');
           }}
           className="w-12 h-12 rounded-full bg-[#25D366] text-white flex items-center justify-center shadow-2xl hover:scale-110 transition cursor-pointer"
           title="Atención directa por WhatsApp"
