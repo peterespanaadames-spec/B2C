@@ -34,6 +34,7 @@ CREATE TABLE IF NOT EXISTS categories (
   name text NOT NULL,
   slug text NOT NULL UNIQUE,
   image_url text,
+  active boolean DEFAULT true,
   created_at timestamp with time zone DEFAULT now()
 );
 
@@ -42,6 +43,7 @@ CREATE TABLE IF NOT EXISTS brands (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   name text NOT NULL,
   logo_url text,
+  active boolean DEFAULT true,
   created_at timestamp with time zone DEFAULT now()
 );
 
@@ -71,6 +73,10 @@ CREATE TABLE IF NOT EXISTS product_images (
   image_url text NOT NULL,
   sort_order integer DEFAULT 0
 );
+
+-- Actualizaciones de esquema (Ejecutar si ya tenías las tablas creadas previamente)
+ALTER TABLE categories ADD COLUMN IF NOT EXISTS active boolean DEFAULT true;
+ALTER TABLE brands ADD COLUMN IF NOT EXISTS active boolean DEFAULT true;
 
 -- Habilitar RLS
 ALTER TABLE categories ENABLE ROW LEVEL SECURITY;

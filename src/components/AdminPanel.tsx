@@ -62,10 +62,12 @@ export default function AdminPanel({
   const [catName, setCatName] = useState('');
   const [catSlug, setCatSlug] = useState('');
   const [catImageUrl, setCatImageUrl] = useState('');
+  const [catActive, setCatActive] = useState(true);
 
   // Form states - Brands
   const [brandName, setBrandName] = useState('');
   const [brandLogoUrl, setBrandLogoUrl] = useState('');
+  const [brandActive, setBrandActive] = useState(true);
 
   // Calculate general dashboard metrics
   const totalProducts = products.length;
@@ -196,6 +198,16 @@ export default function AdminPanel({
     onRefreshData();
   };
 
+  const handleToggleActiveCategory = async (cat: Category) => {
+    await dbService.updateCategory(cat.id, { active: !(cat.active ?? true) });
+    onRefreshData();
+  };
+
+  const handleToggleActiveBrand = async (brand: Brand) => {
+    await dbService.updateBrand(brand.id, { active: !(brand.active ?? true) });
+    onRefreshData();
+  };
+
   // Handle toggle Featured state product
   const handleToggleFeaturedProduct = async (prod: Product) => {
     await dbService.updateProduct(prod.id, { featured: !prod.featured });
@@ -209,11 +221,13 @@ export default function AdminPanel({
       setCatName(cat.name);
       setCatSlug(cat.slug);
       setCatImageUrl(cat.image_url);
+      setCatActive(cat.active ?? true);
     } else {
       setEditingCategory(null);
       setCatName('');
       setCatSlug('');
       setCatImageUrl('');
+      setCatActive(true);
     }
     setShowCategoryModal(true);
   };
@@ -225,7 +239,8 @@ export default function AdminPanel({
     const payload = {
       name: catName.trim(),
       slug: slug,
-      image_url: catImageUrl.trim() || 'https://images.unsplash.com/photo-1586075010923-2dd4570fb338?auto=format&fit=crop&q=80&w=400'
+      image_url: catImageUrl.trim() || 'https://images.unsplash.com/photo-1586075010923-2dd4570fb338?auto=format&fit=crop&q=80&w=400',
+      active: catActive
     };
 
     if (editingCategory) {
@@ -255,10 +270,12 @@ export default function AdminPanel({
       setEditingBrand(b);
       setBrandName(b.name);
       setBrandLogoUrl(b.logo_url);
+      setBrandActive(b.active ?? true);
     } else {
       setEditingBrand(null);
       setBrandName('');
       setBrandLogoUrl('');
+      setBrandActive(true);
     }
     setShowBrandModal(true);
   };
@@ -268,7 +285,8 @@ export default function AdminPanel({
     e.preventDefault();
     const payload = {
       name: brandName.trim(),
-      logo_url: brandLogoUrl.trim() || 'https://images.unsplash.com/photo-1560169897-fc0cdbdfa4d5?auto=format&fit=crop&q=80&w=200'
+      logo_url: brandLogoUrl.trim() || 'https://images.unsplash.com/photo-1560169897-fc0cdbdfa4d5?auto=format&fit=crop&q=80&w=200',
+      active: brandActive
     };
 
     if (editingBrand) {
@@ -804,13 +822,14 @@ export default function AdminPanel({
                 <th className="p-3 font-extrabold">Miniatura</th>
                 <th className="p-3 font-extrabold">Nombre de Categoría</th>
                 <th className="p-3 font-extrabold">Slug Único</th>
+                <th className="p-3 font-extrabold text-center">Visible</th>
                 <th className="p-3 font-extrabold text-right">Acciones</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
               {filteredCategories.length === 0 ? (
                 <tr>
-                  <td colSpan={4} className="p-8 text-center text-gray-400 font-semibold">
+                  <td colSpan={5} className="p-8 text-center text-gray-400 font-semibold">
                     No hay categorías registradas.
                   </td>
                 </tr>
@@ -827,6 +846,19 @@ export default function AdminPanel({
                     </td>
                     <td className="p-3 font-bold text-gray-900">{cat.name}</td>
                     <td className="p-3 font-mono text-gray-400">{cat.slug}</td>
+                    <td className="p-3 text-center">
+                      <button
+                        type="button" onClick={(e) => { e.stopPropagation(); handleToggleActiveCategory(cat); }}
+                        className="text-gray-400 hover:text-[#007185] transition"
+                        title={cat.active ?? true ? "Ocultar Categoría" : "Mostrar Categoría"}
+                      >
+                        {cat.active ?? true ? (
+                          <ToggleRight className="w-6 h-6 mx-auto text-emerald-500" />
+                        ) : (
+                          <ToggleLeft className="w-6 h-6 mx-auto text-gray-300" />
+                        )}
+                      </button>
+                    </td>
                     <td className="p-3 text-right space-x-1 whitespace-nowrap">
                       <button
                         onClick={() => handleOpenCategoryForm(cat)}
@@ -858,13 +890,14 @@ export default function AdminPanel({
               <tr className="bg-[#131921] text-white">
                 <th className="p-3 font-extrabold">Logo</th>
                 <th className="p-3 font-extrabold">Nombre de Marca</th>
+                <th className="p-3 font-extrabold text-center">Visible</th>
                 <th className="p-3 font-extrabold text-right">Acciones</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
               {filteredBrands.length === 0 ? (
                 <tr>
-                  <td colSpan={3} className="p-8 text-center text-gray-400 font-semibold">
+                  <td colSpan={4} className="p-8 text-center text-gray-400 font-semibold">
                     No hay marcas registradas.
                   </td>
                 </tr>
@@ -880,6 +913,19 @@ export default function AdminPanel({
                       />
                     </td>
                     <td className="p-3 font-bold text-gray-900">{b.name}</td>
+                    <td className="p-3 text-center">
+                      <button
+                        type="button" onClick={(e) => { e.stopPropagation(); handleToggleActiveBrand(b); }}
+                        className="text-gray-400 hover:text-[#007185] transition"
+                        title={b.active ?? true ? "Ocultar Marca" : "Mostrar Marca"}
+                      >
+                        {b.active ?? true ? (
+                          <ToggleRight className="w-6 h-6 mx-auto text-emerald-500" />
+                        ) : (
+                          <ToggleLeft className="w-6 h-6 mx-auto text-gray-300" />
+                        )}
+                      </button>
+                    </td>
                     <td className="p-3 text-right space-x-1 whitespace-nowrap">
                       <button
                         onClick={() => handleOpenBrandForm(b)}
@@ -1197,6 +1243,17 @@ export default function AdminPanel({
                 />
               </div>
 
+              {/* Active Toggle */}
+              <label className="flex items-center gap-2 text-xs font-bold text-gray-700 cursor-pointer mt-4">
+                <input
+                  type="checkbox"
+                  checked={catActive}
+                  onChange={(e) => setCatActive(e.target.checked)}
+                  className="w-4 h-4 rounded text-[#FF9900] focus:ring-[#FF9900] accent-[#FF9900]"
+                />
+                <span>Activo y Visible en Catálogo Público</span>
+              </label>
+
               {/* Footer */}
               <div className="pt-4 border-t border-gray-200 flex justify-end gap-2">
                 <button
@@ -1259,6 +1316,17 @@ export default function AdminPanel({
                   className="w-full bg-white border border-gray-300 rounded px-3 py-1.5 text-xs focus:ring-1 focus:ring-[#FF9900] focus:outline-none"
                 />
               </div>
+
+              {/* Active Toggle */}
+              <label className="flex items-center gap-2 text-xs font-bold text-gray-700 cursor-pointer mt-4">
+                <input
+                  type="checkbox"
+                  checked={brandActive}
+                  onChange={(e) => setBrandActive(e.target.checked)}
+                  className="w-4 h-4 rounded text-[#FF9900] focus:ring-[#FF9900] accent-[#FF9900]"
+                />
+                <span>Activo y Visible en Catálogo Público</span>
+              </label>
 
               {/* Footer */}
               <div className="pt-4 border-t border-gray-200 flex justify-end gap-2">
