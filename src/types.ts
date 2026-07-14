@@ -8,6 +8,7 @@ export interface Category {
   name: string;
   slug: string;
   image_url: string;
+  active?: boolean;
   created_at?: string;
 }
 
@@ -15,6 +16,7 @@ export interface Brand {
   id: string;
   name: string;
   logo_url: string;
+  active?: boolean;
   created_at?: string;
 }
 

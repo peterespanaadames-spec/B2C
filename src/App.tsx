@@ -369,8 +369,8 @@ export default function App() {
               {/* Left Column: Filter Sidebar */}
               <div className="hidden lg:block lg:col-span-1">
                 <Sidebar
-                  categories={categories}
-                  brands={brands}
+                  categories={categories.filter(c => c.active !== false)}
+                  brands={brands.filter(b => b.active !== false)}
                   selectedCategory={selectedCategory}
                   setSelectedCategory={setSelectedCategory}
                   selectedBrand={selectedBrand}
