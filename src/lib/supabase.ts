@@ -444,6 +444,90 @@ export const dbService = {
     return true;
   },
 
+  async getProductsPaginated(params: {
+    page: number;
+    pageSize: number;
+    searchTerm?: string;
+    categoryId?: string;
+    brandId?: string;
+    onlyAvailable?: boolean;
+    onlyFeatured?: boolean;
+    onlyOffers?: boolean;
+    minPrice?: number;
+    maxPrice?: number;
+  }): Promise<{ data: Product[], count: number }> {
+    if (supabase && currentSettings.useSupabase) {
+      let query = supabase.from('products').select('*', { count: 'exact' });
+      
+      if (params.searchTerm) {
+        query = query.or(`name.ilike.%${params.searchTerm}%,sku.ilike.%${params.searchTerm}%,description.ilike.%${params.searchTerm}%`);
+      }
+      if (params.categoryId && params.categoryId !== 'all') {
+        query = query.eq('category_id', params.categoryId);
+      }
+      if (params.brandId && params.brandId !== 'all') {
+        query = query.eq('brand_id', params.brandId);
+      }
+      if (params.onlyAvailable) {
+        query = query.gt('stock', 0);
+      }
+      if (params.onlyFeatured) {
+        query = query.eq('featured', true);
+      }
+      if (params.onlyOffers) {
+        query = query.not('offer_price', 'is', null);
+      }
+      if (params.minPrice !== undefined && params.minPrice > 0) {
+        query = query.gte('price', params.minPrice);
+      }
+      if (params.maxPrice !== undefined && params.maxPrice < 1000) {
+        query = query.lte('price', params.maxPrice);
+      }
+
+      query = query.order('featured', { ascending: false }).order('created_at', { ascending: false });
+
+      const from = params.page * params.pageSize;
+      const to = from + params.pageSize - 1;
+      query = query.range(from, to);
+
+      const { data, error, count } = await query;
+      
+      if (!error && data) {
+        return { data: data as Product[], count: count || 0 };
+      }
+      console.warn("Supabase error, falling back to local storage:", error);
+    }
+    
+    // Fallback to local storage (basic logic)
+    let list: Product[] = JSON.parse(localStorage.getItem('bellavista_products') || '[]');
+    if (params.searchTerm) {
+      const q = params.searchTerm.toLowerCase();
+      list = list.filter(p => p.name.toLowerCase().includes(q) || p.sku.toLowerCase().includes(q) || p.description.toLowerCase().includes(q));
+    }
+    if (params.categoryId && params.categoryId !== 'all') list = list.filter(p => p.category_id === params.categoryId);
+    if (params.brandId && params.brandId !== 'all') list = list.filter(p => p.brand_id === params.brandId);
+    if (params.onlyAvailable) list = list.filter(p => p.stock > 0);
+    if (params.onlyFeatured) list = list.filter(p => p.featured);
+    if (params.onlyOffers) list = list.filter(p => p.offer_price !== null);
+    if (params.minPrice !== undefined && params.minPrice > 0) list = list.filter(p => p.price >= params.minPrice!);
+    if (params.maxPrice !== undefined && params.maxPrice < 1000) list = list.filter(p => p.price <= params.maxPrice!);
+
+    // Sort by featured, then created_at (simulate)
+    list.sort((a, b) => {
+      if (a.featured === b.featured) {
+        const dateA = a.created_at ? new Date(a.created_at).getTime() : 0;
+        const dateB = b.created_at ? new Date(b.created_at).getTime() : 0;
+        return dateB - dateA;
+      }
+      return a.featured ? -1 : 1;
+    });
+
+    const from = params.page * params.pageSize;
+    const data = list.slice(from, from + params.pageSize);
+    
+    return { data, count: list.length };
+  },
+
   // Product Operations
   async getProducts(): Promise<Product[]> {
     if (supabase && currentSettings.useSupabase) {
