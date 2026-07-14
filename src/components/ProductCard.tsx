@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React from 'react';
+import React, { useState } from 'react';
 import { Share2, MessageCircle, AlertTriangle, CheckCircle2, Bookmark, Star } from 'lucide-react';
 import { Product, Category, Brand } from '../types.ts';
 
@@ -27,16 +27,22 @@ export default function ProductCard({
   onShare,
   onWhatsAppQuery
 }: ProductCardProps) {
-  const mainImage = images[0] || 'https://images.unsplash.com/photo-1586075010923-2dd4570fb338?auto=format&fit=crop&q=80&w=400';
+  const [imageLoaded, setImageLoaded] = useState(false);
+
+  let optimizedImage = images[0];
+  if (optimizedImage && optimizedImage.includes('supabase.co') && !optimizedImage.includes('?')) {
+    // Basic Supabase Storage transformation assuming it's supported
+    optimizedImage = `${optimizedImage}?width=400&quality=80&format=webp`;
+  }
+  const mainImage = optimizedImage || 'https://images.unsplash.com/photo-1586075010923-2dd4570fb338?auto=format&fit=crop&q=80&w=400';
   
   // Calculate discount percentage
   const discountPercentage = product.offer_price 
     ? Math.round(((product.price - product.offer_price) / product.price) * 100)
     : 0;
 
-  // Rating mock based on ID or Name length
-  const ratingStars = Math.max(4, (product.name.length % 2) + 4);
-  const ratingCount = (product.sku.charCodeAt(4) || 6) * 3;
+  const ratingStars = product.rating_stars ?? Math.max(4, (product.name.length % 2) + 4);
+  const ratingCount = product.rating_count ?? (product.sku.charCodeAt(4) || 6) * 3;
 
   return (
     <div 
@@ -72,13 +78,20 @@ export default function ProductCard({
           </button>
         </div>
 
+        {/* Placeholder SVG */}
+        {!imageLoaded && (
+          <div className="absolute inset-0 flex items-center justify-center p-4">
+            <div className="w-full h-full bg-gray-100 rounded animate-pulse"></div>
+          </div>
+        )}
         {/* Product Image */}
         <img
           src={mainImage}
           alt={product.name}
-          className="absolute inset-0 w-full h-full object-contain p-4 group-hover:scale-105 transition-transform duration-300"
+          className={`absolute inset-0 w-full h-full object-contain p-4 group-hover:scale-105 transition-all duration-500 ${imageLoaded ? 'opacity-100' : 'opacity-0'}`}
           referrerPolicy="no-referrer"
           loading="lazy"
+          onLoad={() => setImageLoaded(true)}
         />
 
         {/* Out of Stock visual mask overlay */}

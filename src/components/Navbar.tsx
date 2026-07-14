@@ -40,18 +40,6 @@ export default function Navbar({
 }: NavbarProps) {
   return (
     <header className="sticky top-0 z-50 bg-[#131921] text-white select-none">
-      {/* Top Warning Strip for Supabase connection type */}
-      <div className="bg-[#232F3E] text-xs text-center py-1.5 px-4 border-b border-gray-700 flex justify-center items-center text-gray-300">
-        <span className="flex items-center gap-2">
-          <span className={`inline-block w-2.5 h-2.5 rounded-full ${currentSettings.useSupabase ? 'bg-green-500' : 'bg-amber-500 animate-pulse'}`}></span>
-          {currentSettings.useSupabase ? (
-            <span>Conectado a Base de Datos en la Nube (Supabase Real)</span>
-          ) : (
-            <span>Modo Local Offline Activo (Persistente con LocalStorage)</span>
-          )}
-        </span>
-      </div>
-
       {/* Main Navbar */}
       <div className="max-w-7xl mx-auto px-4 py-3 flex flex-col md:flex-row items-center gap-4">
         {/* Logo */}
@@ -180,7 +168,8 @@ export default function Navbar({
           Suministros
         </span>
         <div className="flex-1"></div>
-        <span className="text-xs font-bold text-[#FF9900] bg-[#131921] px-2 py-1 rounded border border-gray-800">
+        <span className="text-xs font-bold text-[#FF9900] bg-[#131921] px-2 py-1 rounded border border-gray-800 flex items-center gap-1.5">
+          <span className={`inline-block w-2.5 h-2.5 rounded-full ${currentSettings.useSupabase ? 'bg-green-500' : 'bg-red-500'}`}></span>
           Tasa de cambio: BCV
         </span>
       </nav>

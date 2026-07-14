@@ -4,7 +4,7 @@
  */
 
 import React from 'react';
-import { Sparkles, Printer, GraduationCap, Clock, Flame } from 'lucide-react';
+import { Sparkles, Printer, GraduationCap, Clock, Flame, Cake } from 'lucide-react';
 
 interface BannerProps {
   onSelectCategoryByName: (keyword: string) => void;
@@ -43,20 +43,28 @@ export default function Banner({ onSelectCategoryByName, setOnlyOffers }: Banner
               Fotocopias e Impresiones
             </button>
             <button 
-              onClick={() => onSelectCategoryByName('escolares')}
+              onClick={() => onSelectCategoryByName('papeleria')}
               className="bg-gray-800 border border-gray-700 hover:border-gray-500 text-white text-xs font-bold px-3 py-1.5 rounded flex items-center gap-1.5 cursor-pointer transition transform hover:scale-105 active:scale-95"
               id="banner-btn-supplies"
             >
               <GraduationCap className="w-3.5 h-3.5 text-[#FF9900]" />
-              Útiles Escolares
+              Papelería y Oficina
             </button>
             <button 
-              onClick={() => onSelectCategoryByName('consumibles')}
+              onClick={() => onSelectCategoryByName('escolares')}
               className="bg-emerald-950/50 border border-emerald-800/80 hover:border-emerald-600 text-emerald-300 text-xs font-bold px-3 py-1.5 rounded flex items-center gap-1.5 cursor-pointer transition transform hover:scale-105 active:scale-95"
-              id="banner-btn-corporate"
+              id="banner-btn-school"
             >
-              <Sparkles className="w-3.5 h-3.5 text-yellow-300 animate-pulse" />
-              Suministros Corporativos
+              <GraduationCap className="w-3.5 h-3.5 text-yellow-300 animate-pulse" />
+              Escolares
+            </button>
+            <button 
+              onClick={() => onSelectCategoryByName('postre')}
+              className="bg-pink-950/50 border border-pink-800/80 hover:border-pink-600 text-pink-300 text-xs font-bold px-3 py-1.5 rounded flex items-center gap-1.5 cursor-pointer transition transform hover:scale-105 active:scale-95"
+              id="banner-btn-desserts"
+            >
+              <Cake className="w-3.5 h-3.5 text-pink-400 animate-pulse" />
+              Postres
             </button>
           </div>
         </div>

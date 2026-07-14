@@ -3,13 +3,14 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { 
   BarChart, Package, Tag, Layers, ToggleLeft, ToggleRight, 
-  Plus, Edit3, Trash2, Check, AlertTriangle, Printer, Star, Search, Image as ImageIcon, FileText, X 
+  Plus, Edit3, Trash2, Check, AlertTriangle, Printer, Star, Search, Image as ImageIcon, FileText, X, Upload, Download 
 } from 'lucide-react';
 import { Product, Category, Brand, ProductImage } from '../types.ts';
 import { dbService } from '../lib/supabase.ts';
+import * as XLSX from 'xlsx';
 
 interface AdminPanelProps {
   products: Product[];
@@ -52,6 +53,8 @@ export default function AdminPanel({
   const [prodBrandId, setProdBrandId] = useState('');
   const [prodFeatured, setProdFeatured] = useState(false);
   const [prodActive, setProdActive] = useState(true);
+  const [prodRatingStars, setProdRatingStars] = useState<number>(5);
+  const [prodRatingCount, setProdRatingCount] = useState<number>(0);
   const [prodImageUrl, setProdImageUrl] = useState(''); // Comma separated for multiples
   const [prodTechUrl, setProdTechUrl] = useState('');
 
@@ -85,6 +88,8 @@ export default function AdminPanel({
       setProdBrandId(prod.brand_id);
       setProdFeatured(prod.featured);
       setProdActive(prod.active);
+      setProdRatingStars(prod.rating_stars ?? 5);
+      setProdRatingCount(prod.rating_count ?? 0);
       setProdTechUrl(prod.technical_sheet_url || '');
 
       // Load images
@@ -105,6 +110,8 @@ export default function AdminPanel({
       setProdBrandId(brands[0]?.id || '');
       setProdFeatured(false);
       setProdActive(true);
+      setProdRatingStars(5);
+      setProdRatingCount(0);
       setProdImageUrl('');
       setProdTechUrl('');
     }
@@ -130,6 +137,8 @@ export default function AdminPanel({
       brand_id: prodBrandId,
       featured: prodFeatured,
       active: prodActive,
+      rating_stars: Number(prodRatingStars),
+      rating_count: Number(prodRatingCount),
       technical_sheet_url: prodTechUrl.trim() || null
     };
 
@@ -365,6 +374,123 @@ export default function AdminPanel({
     printWindow.document.close();
   };
 
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleExportExcel = () => {
+    const data = products.map(p => {
+      const category = categories.find(c => c.id === p.category_id);
+      const brand = brands.find(b => b.id === p.brand_id);
+      return {
+        ID: p.id,
+        SKU: p.sku,
+        Nombre: p.name,
+        Slug: p.slug,
+        Descripcion: p.description,
+        Precio: p.price,
+        PrecioOferta: p.offer_price || '',
+        Stock: p.stock,
+        Categoria: category?.name || '',
+        Marca: brand?.name || '',
+        Destacado: p.featured ? 'Si' : 'No',
+        Activo: p.active ? 'Si' : 'No',
+        Estrellas: p.rating_stars ?? 5,
+        Reviews: p.rating_count ?? 0,
+        FichaTecnica: p.technical_sheet_url || ''
+      };
+    });
+    
+    const ws = XLSX.utils.json_to_sheet(data);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Productos");
+    XLSX.writeFile(wb, "Inventario_Copias_Bella_Vista.xlsx");
+  };
+
+  const handleImportExcel = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (activeRole === 'vendedor') {
+      alert("Su rol de Vendedor no tiene permisos para importar registros masivos.");
+      return;
+    }
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = async (evt) => {
+      try {
+        const bstr = evt.target?.result;
+        const wb = XLSX.read(bstr, { type: 'binary' });
+        const wsname = wb.SheetNames[0];
+        const ws = wb.Sheets[wsname];
+        const data: any[] = XLSX.utils.sheet_to_json(ws);
+        
+        let importedCount = 0;
+        
+        for (const row of data) {
+          // Required fields basic check
+          if (!row.Nombre || !row.SKU || row.Precio === undefined || row.Stock === undefined) continue;
+
+          // Try to find category, else use first one or default
+          let catId = categories[0]?.id || '';
+          if (row.Categoria) {
+            const foundCat = categories.find(c => c.name.toLowerCase() === row.Categoria.toString().toLowerCase());
+            if (foundCat) catId = foundCat.id;
+          }
+
+          // Try to find brand, else use first one or default
+          let brandId = brands[0]?.id || '';
+          if (row.Marca) {
+            const foundBrand = brands.find(b => b.name.toLowerCase() === row.Marca.toString().toLowerCase());
+            if (foundBrand) brandId = foundBrand.id;
+          }
+
+          const offerPriceNum = row.PrecioOferta && row.PrecioOferta !== '' ? Number(row.PrecioOferta) : null;
+          const slug = row.Slug || row.Nombre.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)+/g, '');
+
+          const payload = {
+            sku: row.SKU.toString(),
+            name: row.Nombre.toString(),
+            slug: slug,
+            description: row.Descripcion?.toString() || '',
+            price: Number(row.Precio),
+            offer_price: offerPriceNum,
+            stock: Number(row.Stock),
+            category_id: catId,
+            brand_id: brandId,
+            featured: row.Destacado === 'Si' || row.Destacado === true,
+            active: row.Activo === 'Si' || row.Activo === true,
+            rating_stars: row.Estrellas !== undefined ? Number(row.Estrellas) : 5,
+            rating_count: row.Reviews !== undefined ? Number(row.Reviews) : 0,
+            technical_sheet_url: row.FichaTecnica?.toString() || null
+          };
+
+          if (row.ID) {
+            // Check if exists
+            const exists = products.find(p => p.id === row.ID.toString());
+            if (exists) {
+              await dbService.updateProduct(exists.id, payload);
+              importedCount++;
+              continue;
+            }
+          }
+          // Create new
+          await dbService.createProduct(payload);
+          importedCount++;
+        }
+        
+        alert(`Se han importado o actualizado exitosamente ${importedCount} productos.`);
+        onRefreshData();
+      } catch (err) {
+        console.error("Error importing Excel file:", err);
+        alert("Ocurrió un error al procesar el archivo Excel. Verifique el formato.");
+      }
+      
+      // Reset input
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    };
+    reader.readAsBinaryString(file);
+  };
+
   // Filtered lists for table views
   const filteredProducts = products.filter(p => 
     p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -397,7 +523,7 @@ export default function AdminPanel({
         </div>
 
         {/* Top actions */}
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <button
             onClick={handlePrintInventoryReport}
             className="px-4 py-2 bg-gray-800 hover:bg-gray-900 text-white text-xs font-bold rounded flex items-center gap-2 cursor-pointer shadow"
@@ -407,14 +533,39 @@ export default function AdminPanel({
           </button>
           
           {activeTab === 'products' && (
-            <button
-              onClick={() => handleOpenProductForm(null)}
-              className="px-4 py-2 bg-[#FF9900] hover:bg-[#e68a00] text-[#131921] text-xs font-black rounded flex items-center gap-1.5 cursor-pointer shadow"
-              id="btn-add-product"
-            >
-              <Plus className="w-4 h-4" />
-              Nuevo Producto
-            </button>
+            <div className="flex flex-wrap gap-2">
+              <input
+                type="file"
+                ref={fileInputRef}
+                style={{ display: 'none' }}
+                accept=".xlsx, .xls"
+                onChange={handleImportExcel}
+              />
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded flex items-center gap-1.5 cursor-pointer shadow"
+                id="btn-import-products"
+              >
+                <Upload className="w-4 h-4" />
+                Importar Excel
+              </button>
+              <button
+                onClick={handleExportExcel}
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded flex items-center gap-1.5 cursor-pointer shadow"
+                id="btn-export-products"
+              >
+                <Download className="w-4 h-4" />
+                Exportar Excel
+              </button>
+              <button
+                onClick={() => handleOpenProductForm(null)}
+                className="px-4 py-2 bg-[#FF9900] hover:bg-[#e68a00] text-[#131921] text-xs font-black rounded flex items-center gap-1.5 cursor-pointer shadow"
+                id="btn-add-product"
+              >
+                <Plus className="w-4 h-4" />
+                Nuevo Producto
+              </button>
+            </div>
           )}
 
           {activeTab === 'categories' && (
@@ -916,26 +1067,59 @@ export default function AdminPanel({
               </div>
 
               {/* Featured & Active checkboxes */}
-              <div className="flex gap-6 items-center p-3 bg-gray-50 border border-gray-150 rounded-lg">
-                <label className="flex items-center gap-2 text-xs font-bold text-gray-700 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={prodFeatured}
-                    onChange={(e) => setProdFeatured(e.target.checked)}
-                    className="w-4 h-4 rounded text-[#FF9900] focus:ring-[#FF9900] accent-[#FF9900]"
-                  />
-                  <span>Destacar en Inicio (Oferta Principal)</span>
-                </label>
-
-                <label className="flex items-center gap-2 text-xs font-bold text-gray-700 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={prodActive}
-                    onChange={(e) => setProdActive(e.target.checked)}
-                    className="w-4 h-4 rounded text-[#FF9900] focus:ring-[#FF9900] accent-[#FF9900]"
-                  />
-                  <span>Activo y Visible en Catálogo Público</span>
-                </label>
+              <div className="flex flex-col gap-3 p-3 bg-gray-50 border border-gray-150 rounded-lg">
+                <div className="flex gap-6 items-center">
+                  <label className="flex items-center gap-2 text-xs font-bold text-gray-700 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={prodFeatured}
+                      onChange={(e) => setProdFeatured(e.target.checked)}
+                      className="w-4 h-4 rounded text-[#FF9900] focus:ring-[#FF9900] accent-[#FF9900]"
+                    />
+                    <span>Destacar en Inicio (Oferta Principal)</span>
+                  </label>
+                  <label className="flex items-center gap-2 text-xs font-bold text-gray-700 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={prodActive}
+                      onChange={(e) => setProdActive(e.target.checked)}
+                      className="w-4 h-4 rounded text-[#FF9900] focus:ring-[#FF9900] accent-[#FF9900]"
+                    />
+                    <span>Activo y Visible en Catálogo Público</span>
+                  </label>
+                </div>
+                
+                {prodFeatured && (
+                  <div className="flex gap-4 items-center border-t border-gray-200 pt-3 mt-1">
+                    <div className="flex-1">
+                      <label className="block text-xs font-bold text-gray-700 mb-1 flex items-center gap-1">
+                        <Star className="w-3.5 h-3.5 text-[#FF9900] fill-[#FF9900]" />
+                        Calificación Manual (Estrellas 1-5)
+                      </label>
+                      <input
+                        type="number"
+                        min="1"
+                        max="5"
+                        step="0.5"
+                        value={prodRatingStars}
+                        onChange={(e) => setProdRatingStars(Number(e.target.value))}
+                        className="w-full bg-white border border-gray-300 rounded px-3 py-1.5 text-xs focus:ring-1 focus:ring-[#FF9900]"
+                      />
+                    </div>
+                    <div className="flex-1">
+                      <label className="block text-xs font-bold text-gray-700 mb-1">
+                        Número de Usuarios (Reviews)
+                      </label>
+                      <input
+                        type="number"
+                        min="0"
+                        value={prodRatingCount}
+                        onChange={(e) => setProdRatingCount(Number(e.target.value))}
+                        className="w-full bg-white border border-gray-300 rounded px-3 py-1.5 text-xs focus:ring-1 focus:ring-[#FF9900]"
+                      />
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Footer Save button */}
