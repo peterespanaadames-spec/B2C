@@ -229,6 +229,45 @@ export default function App() {
     };
   }, []);
 
+  // Deep linking: check URL for a shared product
+  useEffect(() => {
+    let active = true;
+    const checkDeepLink = async () => {
+      const params = new URLSearchParams(window.location.search);
+      const productSlug = params.get('producto') || params.get('p');
+      const hash = window.location.hash;
+      
+      let slug = productSlug;
+      if (!slug && hash.includes('#/producto/')) {
+        slug = hash.split('#/producto/')[1];
+      } else if (!slug && window.location.pathname.startsWith('/producto/')) {
+        slug = window.location.pathname.split('/producto/')[1];
+      }
+
+      if (slug) {
+        try {
+          const allProds = await dbService.getProducts();
+          const matchedProduct = allProds.find(p => p.slug === slug || p.id === slug || p.sku === slug);
+          if (matchedProduct && active) {
+            setSelectedProduct(matchedProduct);
+          }
+        } catch (err) {
+          console.error("Error checking deep link product:", err);
+        }
+      }
+    };
+
+    // Run on initial load
+    checkDeepLink();
+
+    // Also listen to popstate changes (e.g. going back/forward)
+    window.addEventListener('popstate', checkDeepLink);
+    return () => {
+      active = false;
+      window.removeEventListener('popstate', checkDeepLink);
+    };
+  }, []);
+
   // Display toast utility
   const triggerToast = (message: string) => {
     setToastMessage(message);
@@ -259,7 +298,7 @@ export default function App() {
   // Share link trigger
   const handleShareProduct = (product: Product, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
-    const url = `${window.location.origin}/producto/${product.slug}`;
+    const url = `https://b2c-roan-five.vercel.app/?producto=${product.slug}`;
     navigator.clipboard.writeText(url).then(() => {
       triggerToast(`¡Enlace del producto ${product.sku} copiado al portapapeles!`);
     });
