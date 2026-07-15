@@ -357,10 +357,14 @@ export default function App() {
           /* PUBLIC MARKETPLACE VIEW */
           <>
             {/* Header Banner */}
-            <div className="hidden lg:block">
+            <div className="block">
               <Banner 
                 onSelectCategoryByName={handleSelectCategoryByName}
                 setOnlyOffers={setOnlyOffers}
+                products={products}
+                productImages={productImages}
+                categories={categories}
+                onViewProduct={(p) => setSelectedProduct(p)}
               />
             </div>
 
