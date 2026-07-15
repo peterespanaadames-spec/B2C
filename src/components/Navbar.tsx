@@ -75,7 +75,7 @@ export default function Navbar({
             type="text"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            placeholder="Buscar por nombre, SKU, marca o categoría..."
+            placeholder="Buscar por nombre, marca o categoría..."
             className="w-full pl-4 pr-14 py-2 bg-white text-[#0F1111] placeholder-gray-400 rounded focus:outline-none focus:ring-2 focus:ring-[#FF9900] text-sm font-medium border border-gray-300"
             id="input-global-search"
           />

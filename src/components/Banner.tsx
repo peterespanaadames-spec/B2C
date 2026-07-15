@@ -59,13 +59,13 @@ export default function Banner({
   };
 
   // Extract products for each section from the database (Strictly no simulated/mock items)
-  const photocopyProducts = getCategoryProducts('Sistemas de Impresión y Copiado', 'cat-1');
+  const photocopyProducts = getCategoryProducts('Impresiones y Copiado', 'cat-1');
   const officeProducts = getCategoryProducts('Papelería y Oficina', 'cat-3');
   const schoolProducts = getCategoryProducts('Escolares y Marcadores', 'cat-2');
   const dessertProducts = getCategoryProducts('Postres', 'c5fd6476-9639-4cd6-af3e-8515f366fd07');
 
   // Resolve category display/filter names dynamically
-  const photocopyCatName = getCategoryName('Sistemas de Impresión y Copiado', 'cat-1');
+  const photocopyCatName = getCategoryName('Impresiones y Copiado', 'cat-1');
   const officeCatName = getCategoryName('Papelería y Oficina', 'cat-3');
   const schoolCatName = getCategoryName('Escolares y Marcadores', 'cat-2');
   const dessertCatName = getCategoryName('Postres', 'c5fd6476-9639-4cd6-af3e-8515f366fd07');
@@ -234,7 +234,7 @@ export default function Banner({
               Planifica tus clases
             </span>
             <h2 className="text-2xl font-black text-[#0F1111] leading-tight mb-1">
-              Escolar y Marcadores
+              Escolares y Marcadores
             </h2>
             <p className="text-xs text-[#0F1111]/80 font-bold mb-4">
               Lápices, marcadores artísticos y colores
@@ -245,7 +245,7 @@ export default function Banner({
           </div>
 
           <div className="text-xs font-extrabold text-[#0F1111] flex items-center gap-1 group-hover:translate-x-1.5 transition-transform mt-2">
-            Ver Tienda de Escolares
+            Ver todo Escolares y Marcadores
             <ArrowRight className="w-3.5 h-3.5" />
           </div>
         </div>

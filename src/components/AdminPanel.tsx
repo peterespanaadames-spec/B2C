@@ -124,7 +124,25 @@ export default function AdminPanel({
   const handleSaveProduct = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    const offerPriceNum = prodOfferPrice.trim() !== '' ? Number(prodOfferPrice) : null;
+    // Parse price and offer price with Spanish comma decimal safety
+    const parseSpanishFloat = (val: any): number => {
+      if (val === undefined || val === null) return 0;
+      const str = String(val).trim().replace(',', '.');
+      const parsed = parseFloat(str);
+      return isNaN(parsed) ? 0 : parsed;
+    };
+
+    const parseSpanishFloatOptional = (val: any): number | null => {
+      if (val === undefined || val === null) return null;
+      const str = String(val).trim();
+      if (str === '' || str.toLowerCase() === 'ninguno') return null;
+      const cleaned = str.replace(',', '.');
+      const parsed = parseFloat(cleaned);
+      return isNaN(parsed) ? null : parsed;
+    };
+
+    const finalPrice = parseSpanishFloat(prodPrice);
+    const offerPriceNum = parseSpanishFloatOptional(prodOfferPrice);
     const slug = prodName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)+/g, '');
 
     const payload = {
@@ -132,7 +150,7 @@ export default function AdminPanel({
       name: prodName.trim(),
       slug: slug,
       description: prodDescription.trim(),
-      price: Number(prodPrice),
+      price: finalPrice,
       offer_price: offerPriceNum,
       stock: Number(prodStock),
       category_id: prodCategoryId,
@@ -175,8 +193,10 @@ export default function AdminPanel({
 
       setShowProductModal(false);
       onRefreshData();
-    } catch (e) {
-      console.error("Error saving product", e);
+      alert(editingProduct ? "¡Producto actualizado exitosamente!" : "¡Nuevo producto creado exitosamente!");
+    } catch (err: any) {
+      console.error("Error saving product", err);
+      alert(`Error al guardar el producto: ${err.message || err.toString()}`);
     }
   };
 
