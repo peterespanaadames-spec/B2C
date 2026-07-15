@@ -34,6 +34,29 @@ export default function ProductDetailModal({
   const [relatedProducts, setRelatedProducts] = useState<Product[]>([]);
   const [copiedLink, setCopiedLink] = useState(false);
 
+  const formatModalPrice = (price: number, size: 'large' | 'small' = 'large') => {
+    const formattedPrice = price.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const [intPart, decPart] = formattedPrice.split('.');
+    
+    if (size === 'small') {
+      return (
+        <div className="flex items-start text-[#0F1111]">
+          <span className="text-[12px] font-bold mt-[1px] mr-[2px]">US$</span>
+          <span className="text-lg font-black leading-none tracking-tight">{intPart}</span>
+          <span className="text-[10px] font-bold ml-[1px] leading-none mt-[2px]">{decPart}</span>
+        </div>
+      );
+    }
+    
+    return (
+      <div className="flex items-start text-[#0F1111]">
+        <span className="text-[16px] font-bold mt-[4px] mr-[4px]">US$</span>
+        <span className="text-3xl font-black leading-none tracking-tight">{intPart}</span>
+        <span className="text-[14px] font-bold ml-[1px] leading-none mt-[3px]">{decPart}</span>
+      </div>
+    );
+  };
+
   // Load product images and related products
   useEffect(() => {
     const loadImages = async () => {
@@ -360,17 +383,17 @@ export default function ProductDetailModal({
                   <div>
                     <span className="text-xs font-bold text-red-600 uppercase tracking-widest block mb-0.5">Oferta Distribuidor</span>
                     <div className="flex items-baseline gap-2">
-                      <span className="text-3xl font-black text-[#0F1111]">${product.offer_price.toFixed(2)} USD</span>
-                      <span className="text-base text-gray-400 line-through">${product.price.toFixed(2)} USD</span>
+                      {formatModalPrice(product.offer_price)}
+                      <span className="text-base text-gray-400 line-through">US${product.price.toFixed(2)}</span>
                       <span className="bg-red-100 text-red-600 text-xs font-bold px-2 py-0.5 rounded-full">
-                        Ahorra ${(product.price - product.offer_price).toFixed(2)}
+                        Ahorra US${(product.price - product.offer_price).toFixed(2)}
                       </span>
                     </div>
                   </div>
                 ) : (
                   <div>
                     <span className="text-xs font-bold text-gray-400 uppercase tracking-widest block mb-0.5">Precio Unitario</span>
-                    <span className="text-3xl font-black text-[#0F1111]">${product.price.toFixed(2)} USD</span>
+                    {formatModalPrice(product.price)}
                   </div>
                 )}
               </div>
@@ -477,7 +500,7 @@ export default function ProductDetailModal({
                       <h5 className="text-xs font-bold text-[#0F1111] line-clamp-2 leading-tight group-hover:text-[#007185] transition-colors mb-1 min-h-[32px]">
                         {relProd.name}
                       </h5>
-                      <p className="text-xs font-black text-[#131921]">${(relProd.offer_price || relProd.price).toFixed(2)} USD</p>
+                      {formatModalPrice(relProd.offer_price || relProd.price, 'small')}
                     </div>
                   </div>
                 );

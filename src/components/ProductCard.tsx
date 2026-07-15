@@ -34,12 +34,13 @@ const ProductCard: React.FC<ProductCardProps> = ({
     : 0;
 
   const formatPrice = (price: number) => {
-    const [intPart, decPart] = price.toFixed(2).split('.');
+    const formattedPrice = price.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const [intPart, decPart] = formattedPrice.split('.');
     return (
       <div className="flex items-start text-[#0F1111]">
-        <span className="text-[10px] mt-[4px] font-medium mr-[1px]">US$</span>
-        <span className="text-[20px] font-normal leading-none tracking-tight">{intPart}</span>
-        <span className="text-[10px] font-medium ml-[1px] leading-none mt-[2px]">{decPart}</span>
+        <span className="text-[14px] font-bold mt-[2px] mr-[4px]">US$</span>
+        <span className="text-[26px] font-black leading-none tracking-tight">{intPart}</span>
+        <span className="text-[12px] font-bold ml-[1px] leading-none mt-[2px]">{decPart}</span>
       </div>
     );
   };
