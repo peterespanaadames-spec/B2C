@@ -392,7 +392,7 @@ export default function App() {
               </div>
 
               {/* Right Column: Products Display Grid */}
-              <div className="lg:col-span-3 text-left">
+              <div id="products-display-section" className="lg:col-span-3 text-left scroll-mt-20">
                 {/* Result header count */}
                 <div className="bg-white p-3.5 rounded-lg border border-gray-200 shadow-sm flex justify-between items-center mb-4">
                   <span className="text-xs font-bold uppercase tracking-wider text-gray-500">
