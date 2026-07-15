@@ -261,7 +261,7 @@ export default function ProductDetailModal({
   };
 
   const copyProductLink = () => {
-    const url = `${window.location.origin}/producto/${product.slug}`;
+    const url = `https://b2c-roan-five.vercel.app/?producto=${product.slug}`;
     navigator.clipboard.writeText(url).then(() => {
       setCopiedLink(true);
       setTimeout(() => setCopiedLink(false), 2500);
