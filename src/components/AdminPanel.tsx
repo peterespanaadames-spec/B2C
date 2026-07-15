@@ -86,8 +86,8 @@ export default function AdminPanel({
       setProdPrice(prod.price);
       setProdOfferPrice(prod.offer_price !== null ? prod.offer_price.toString() : '');
       setProdStock(prod.stock);
-      setProdCategoryId(prod.category_id);
-      setProdBrandId(prod.brand_id);
+      setProdCategoryId(prod.category_id || '');
+      setProdBrandId(prod.brand_id || '');
       setProdFeatured(prod.featured);
       setProdActive(prod.active);
       setProdRatingStars(prod.rating_stars ?? 5);
@@ -1183,7 +1183,7 @@ export default function AdminPanel({
                   id="btn-save-product-modal"
                 >
                   <Check className="w-4 h-4" />
-                  Guardar Producto
+                  {editingProduct ? 'Guardar Modificaciones' : 'Guardar Producto'}
                 </button>
               </div>
             </form>
@@ -1269,7 +1269,7 @@ export default function AdminPanel({
                   id="btn-save-category-modal"
                 >
                   <Check className="w-4 h-4" />
-                  Guardar Categoría
+                  {editingCategory ? 'Guardar Modificaciones' : 'Guardar Categoría'}
                 </button>
               </div>
             </form>
@@ -1343,7 +1343,7 @@ export default function AdminPanel({
                   id="btn-save-brand-modal"
                 >
                   <Check className="w-4 h-4" />
-                  Guardar Marca
+                  {editingBrand ? 'Guardar Modificaciones' : 'Guardar Marca'}
                 </button>
               </div>
             </form>
