@@ -3,9 +3,10 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { ArrowRight, Sparkles } from 'lucide-react';
 import { Product, ProductImage, Category } from '../types';
+import { dbService } from '../lib/supabase.ts';
 
 interface BannerProps {
   onSelectCategoryByName: (keyword: string) => void;
@@ -25,9 +26,40 @@ export default function Banner({
   onViewProduct
 }: BannerProps) {
 
+  const [localProducts, setLocalProducts] = useState<Product[]>([]);
+  const [localImages, setLocalImages] = useState<ProductImage[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let active = true;
+    const fetchBannerData = async () => {
+      try {
+        const [allProds, allImgs] = await Promise.all([
+          dbService.getProducts(),
+          dbService.getProductImages()
+        ]);
+        if (active) {
+          setLocalProducts(allProds);
+          setLocalImages(allImgs);
+          setLoading(false);
+        }
+      } catch (err) {
+        console.error("Error fetching data inside Banner:", err);
+        if (active) {
+          setLoading(false);
+        }
+      }
+    };
+    fetchBannerData();
+    return () => {
+      active = false;
+    };
+  }, []);
+
   // Helper to find real product images from the database
   const getProductImg = (productId: string): string => {
-    const found = productImages.find(img => img.product_id === productId);
+    const imagesToUse = localImages.length > 0 ? localImages : productImages;
+    const found = imagesToUse.find(img => img.product_id === productId);
     return found ? found.image_url : 'https://images.unsplash.com/photo-1513542789411-b6a5d4f31634?auto=format&fit=crop&q=80&w=150';
   };
 
@@ -42,7 +74,8 @@ export default function Banner({
     const categoryId = matchedCategory ? matchedCategory.id : fallbackId;
     
     // Filter active products belonging to this category, max 4
-    return products
+    const productsToUse = localProducts.length > 0 ? localProducts : products;
+    return productsToUse
       .filter(p => p.active && p.category_id === categoryId)
       .sort((a, b) => (b.featured ? 1 : 0) - (a.featured ? 1 : 0))
       .slice(0, 4);
