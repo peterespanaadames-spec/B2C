@@ -38,6 +38,16 @@ export default function Navbar({
   onResetFilters,
   onSelectCategoryByName
 }: NavbarProps) {
+
+  const scrollToProducts = () => {
+    setTimeout(() => {
+      const element = document.getElementById('products-display-section');
+      if (element) {
+        element.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    }, 150);
+  };
+
   return (
     <header className="sticky top-0 z-50 bg-[#131921] text-white select-none">
       {/* Main Navbar */}
@@ -45,7 +55,10 @@ export default function Navbar({
         {/* Logo */}
         <div className="flex items-center justify-between w-full md:w-auto gap-4">
           <div 
-            onClick={onExitAdminView} 
+            onClick={() => {
+              onExitAdminView();
+              scrollToProducts();
+            }} 
             className="cursor-pointer group flex flex-col"
             id="nav-logo"
           >
@@ -75,12 +88,18 @@ export default function Navbar({
             type="text"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                scrollToProducts();
+              }
+            }}
             placeholder="Buscar por nombre, marca o categoría..."
             className="w-full pl-4 pr-14 py-2 bg-white text-[#0F1111] placeholder-gray-400 rounded focus:outline-none focus:ring-2 focus:ring-[#FF9900] text-sm font-medium border border-gray-300"
             id="input-global-search"
           />
           <button 
             type="button"
+            onClick={scrollToProducts}
             className="absolute right-0 top-0 h-full bg-[#FF9900] hover:bg-[#e68a00] text-[#131921] px-4 rounded-r flex items-center justify-center cursor-pointer transition-colors border-l border-gray-300"
           >
             <Search className="w-5 h-5 font-bold" />
@@ -119,7 +138,10 @@ export default function Navbar({
       {/* Sub-navigation bar (Dark Navy) */}
       <nav className="bg-[#232F3E] text-white px-4 py-2 text-xs md:text-sm font-medium flex items-center gap-4 overflow-x-auto whitespace-nowrap border-t border-gray-800">
         <div 
-          onClick={onResetFilters}
+          onClick={() => {
+            onResetFilters();
+            scrollToProducts();
+          }}
           className={`flex items-center gap-1 cursor-pointer transition px-2 py-0.5 border rounded ${
             selectedCategory === 'all' && !onlyOffers
               ? 'border-[#FF9900] text-[#FF9900] font-extrabold bg-[#131921]'
@@ -136,6 +158,7 @@ export default function Navbar({
             setOnlyOffers(true);
             setSelectedCategory('all');
             setSearchTerm('');
+            scrollToProducts();
           }}
           className={`cursor-pointer transition px-2 py-0.5 rounded border ${
             onlyOffers
@@ -147,25 +170,60 @@ export default function Navbar({
           Ofertas
         </span>
         <span 
-          onClick={() => onSelectCategoryByName('papelería')}
-          className="cursor-pointer hover:text-[#FF9900] transition px-2 py-0.5 rounded border border-transparent hover:border-gray-700"
+          onClick={() => {
+            onSelectCategoryByName('Papelería y Oficina');
+            scrollToProducts();
+          }}
+          className={`cursor-pointer transition px-2 py-0.5 rounded border ${
+            selectedCategory === 'cat-3' && !onlyOffers
+              ? 'border-[#FF9900] text-[#FF9900] font-extrabold bg-[#131921]'
+              : 'border-transparent hover:border-gray-700 hover:text-[#FF9900]'
+          }`}
           id="nav-sub-stationery"
         >
           Papelería
         </span>
         <span 
-          onClick={() => onSelectCategoryByName('sistemas')}
-          className="cursor-pointer hover:text-[#FF9900] transition px-2 py-0.5 rounded border border-transparent hover:border-gray-700"
-          id="nav-sub-tech"
+          onClick={() => {
+            onSelectCategoryByName('Impresiones y Copiado');
+            scrollToProducts();
+          }}
+          className={`cursor-pointer transition px-2 py-0.5 rounded border ${
+            selectedCategory === 'cat-1' && !onlyOffers
+              ? 'border-[#FF9900] text-[#FF9900] font-extrabold bg-[#131921]'
+              : 'border-transparent hover:border-gray-700 hover:text-[#FF9900]'
+          }`}
+          id="nav-sub-copias"
         >
-          Tecnología
+          Copias
         </span>
         <span 
-          onClick={() => onSelectCategoryByName('consumibles')}
-          className="cursor-pointer hover:text-[#FF9900] transition px-2 py-0.5 rounded border border-transparent hover:border-gray-700"
+          onClick={() => {
+            onSelectCategoryByName('Escolares y Marcadores');
+            scrollToProducts();
+          }}
+          className={`cursor-pointer transition px-2 py-0.5 rounded border ${
+            selectedCategory === 'cat-2' && !onlyOffers
+              ? 'border-[#FF9900] text-[#FF9900] font-extrabold bg-[#131921]'
+              : 'border-transparent hover:border-gray-700 hover:text-[#FF9900]'
+          }`}
           id="nav-sub-supplies"
         >
-          Suministros
+          Escolares
+        </span>
+        <span 
+          onClick={() => {
+            onSelectCategoryByName('Postres');
+            scrollToProducts();
+          }}
+          className={`cursor-pointer transition px-2 py-0.5 rounded border ${
+            selectedCategory === 'c5fd6476-9639-4cd6-af3e-8515f366fd07' && !onlyOffers
+              ? 'border-[#FF9900] text-[#FF9900] font-extrabold bg-[#131921]'
+              : 'border-transparent hover:border-gray-700 hover:text-[#FF9900]'
+          }`}
+          id="nav-sub-postres"
+        >
+          Postres
         </span>
         <div className="flex-1"></div>
         <span className="text-xs font-bold text-[#FF9900] bg-[#131921] px-2 py-1 rounded border border-gray-800 flex items-center gap-1.5">

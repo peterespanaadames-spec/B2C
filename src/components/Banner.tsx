@@ -91,6 +91,26 @@ export default function Banner({
     return matchedCategory ? matchedCategory.name : categoryName;
   };
 
+  const handleSelectCategory = (categoryName: string) => {
+    onSelectCategoryByName(categoryName);
+    setTimeout(() => {
+      const element = document.getElementById('products-display-section');
+      if (element) {
+        element.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    }, 150);
+  };
+
+  const handleSelectOffers = () => {
+    setOnlyOffers(true);
+    setTimeout(() => {
+      const element = document.getElementById('products-display-section');
+      if (element) {
+        element.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    }, 150);
+  };
+
   // Extract products for each section from the database (Strictly no simulated/mock items)
   const photocopyProducts = getCategoryProducts('Impresiones y Copiado', 'cat-1');
   const officeProducts = getCategoryProducts('Papelería y Oficina', 'cat-3');
@@ -190,7 +210,7 @@ export default function Banner({
           </p>
         </div>
         <button 
-          onClick={() => setOnlyOffers(true)}
+          onClick={handleSelectOffers}
           className="bg-[#FF9900] hover:bg-[#FF9900]/90 text-[#131921] text-xs font-bold px-3.5 py-1.5 rounded-md shadow-sm transition transform hover:scale-105 active:scale-95 flex items-center gap-1 cursor-pointer"
           id="banner-top-promo-btn"
         >
@@ -204,7 +224,7 @@ export default function Banner({
         
         {/* Card 1: IMPRESIONES Y COPIADO (Vivid Amber/Orange) */}
         <div 
-          onClick={() => onSelectCategoryByName(photocopyCatName)}
+          onClick={() => handleSelectCategory(photocopyCatName)}
           className="bg-[#FFA41C] border border-[#E07A00] rounded-2xl p-5 flex flex-col justify-between min-h-[460px] hover:shadow-2xl hover:border-[#0F1111]/30 transition-all duration-300 cursor-pointer group"
           id="banner-section-photocopies"
         >
@@ -231,7 +251,7 @@ export default function Banner({
 
         {/* Card 2: PAPELERIA Y OFICINA (Vivid Cyan) */}
         <div 
-          onClick={() => onSelectCategoryByName(officeCatName)}
+          onClick={() => handleSelectCategory(officeCatName)}
           className="bg-[#00D8F6] border border-[#00ADC6] rounded-2xl p-5 flex flex-col justify-between min-h-[460px] hover:shadow-2xl hover:border-[#0F1111]/30 transition-all duration-300 cursor-pointer group"
           id="banner-section-supplies"
         >
@@ -258,7 +278,7 @@ export default function Banner({
 
         {/* Card 3: ESCOLAR Y MARCADORES (Vivid Green) */}
         <div 
-          onClick={() => onSelectCategoryByName(schoolCatName)}
+          onClick={() => handleSelectCategory(schoolCatName)}
           className="bg-[#2BE483] border border-[#059669] rounded-2xl p-5 flex flex-col justify-between min-h-[460px] hover:shadow-2xl hover:border-[#0F1111]/30 transition-all duration-300 cursor-pointer group"
           id="banner-section-school"
         >
@@ -285,7 +305,7 @@ export default function Banner({
 
         {/* Card 4: POSTRES (Vivid Rose/Pink) */}
         <div 
-          onClick={() => onSelectCategoryByName(dessertCatName)}
+          onClick={() => handleSelectCategory(dessertCatName)}
           className="bg-[#FF6295] border border-[#EC4899] rounded-2xl p-5 flex flex-col justify-between min-h-[460px] hover:shadow-2xl hover:border-[#0F1111]/30 transition-all duration-300 cursor-pointer group"
           id="banner-section-desserts"
         >
