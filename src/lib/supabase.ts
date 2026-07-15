@@ -173,7 +173,7 @@ export const dbService = {
     query = query.eq('active', true);
 
     if (params.searchTerm) {
-      query = query.or(`name.ilike.%${params.searchTerm}%,sku.ilike.%${params.searchTerm}%,description.ilike.%${params.searchTerm}%`);
+      query = query.or(`name.ilike.%${params.searchTerm}%,description.ilike.%${params.searchTerm}%`);
     }
     if (params.categoryId && params.categoryId !== 'all') {
       query = query.eq('category_id', params.categoryId);
@@ -225,6 +225,11 @@ export const dbService = {
       category_id: product.category_id === '' ? null : product.category_id,
       brand_id: product.brand_id === '' ? null : product.brand_id
     };
+    
+    // rating_stars and rating_count do not exist in database products table
+    delete (sanitizedProduct as any).rating_stars;
+    delete (sanitizedProduct as any).rating_count;
+
     const newProduct = {
       ...sanitizedProduct,
       id: crypto.randomUUID(),
@@ -243,6 +248,10 @@ export const dbService = {
     if (product.category_id === '') sanitizedProduct.category_id = null;
     if (product.brand_id === '') sanitizedProduct.brand_id = null;
     
+    // rating_stars and rating_count do not exist in database products table
+    delete (sanitizedProduct as any).rating_stars;
+    delete (sanitizedProduct as any).rating_count;
+
     const updatedFields = {
       ...sanitizedProduct,
       updated_at: new Date().toISOString()
