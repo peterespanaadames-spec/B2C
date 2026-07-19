@@ -8,7 +8,7 @@ import {
   Package, LayoutGrid, CheckCircle2, AlertTriangle, 
   Settings, HelpCircle, Phone, ArrowUp, Info, ShieldAlert, Lock
 } from 'lucide-react';
-import { Category, Brand, Product, ProductImage } from './types';
+import { Category, Brand, Product, ProductImage, CartItem } from './types';
 import { dbService } from './lib/supabase.ts';
 import Navbar from './components/Navbar.tsx';
 import Banner from './components/Banner.tsx';
@@ -17,6 +17,10 @@ import ProductCard from './components/ProductCard.tsx';
 import ProductDetailModal from './components/ProductDetailModal.tsx';
 import AdminPanel from './components/AdminPanel.tsx';
 import SettingsModal from './components/SettingsModal.tsx';
+import CartDrawer from './components/CartDrawer.tsx';
+import InfoModal from './components/InfoModal.tsx';
+import OrderTrackingModal from './components/OrderTrackingModal.tsx';
+import { Clock } from 'lucide-react';
 
 export default function App() {
   // Database states
@@ -26,6 +30,17 @@ export default function App() {
   const [productImages, setProductImages] = useState<ProductImage[]>([]);
   const [loading, setLoading] = useState(true);
 
+  // Tracking Order States
+  const [trackingOrderId, setTrackingOrderId] = useState<string | null>(null);
+  const [hasSavedOrder, setHasSavedOrder] = useState(false);
+
+  useEffect(() => {
+    const savedId = localStorage.getItem('copias_bellavista_last_order_id');
+    if (savedId) {
+      setHasSavedOrder(true);
+    }
+  }, []);
+
   // Layout and view states
   const [activeRole, setActiveRole] = useState<'admin' | 'vendedor' | 'cliente'>('cliente');
   const [isAdminView, setIsAdminView] = useState(false);
@@ -34,6 +49,84 @@ export default function App() {
   const [showBackToTop, setShowBackToTop] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [showAdminShortcutButton, setShowAdminShortcutButton] = useState(false);
+  const [isInfoModalOpen, setIsInfoModalOpen] = useState(false);
+
+  // Shopping Cart States
+  const [cart, setCart] = useState<CartItem[]>(() => {
+    try {
+      const saved = localStorage.getItem('copias_bella_vista_cart');
+      return saved ? JSON.parse(saved) : [];
+    } catch (e) {
+      console.error("Error reading cart from localStorage:", e);
+      return [];
+    }
+  });
+  const [isCartOpen, setIsCartOpen] = useState(false);
+
+  // Sync cart to localStorage
+  useEffect(() => {
+    try {
+      localStorage.setItem('copias_bella_vista_cart', JSON.stringify(cart));
+    } catch (e) {
+      console.error("Error saving cart to localStorage:", e);
+    }
+  }, [cart]);
+
+  // Cart helper functions
+  const handleAddToCart = (product: Product, quantity: number = 1) => {
+    setCart(prev => {
+      const existing = prev.find(item => item.product.id === product.id);
+      if (existing) {
+        const newQty = Math.min(product.stock, existing.quantity + quantity);
+        triggerToast(`Actualizado: ${product.name} en el carrito (${newQty} uds).`);
+        return prev.map(item => item.product.id === product.id ? { ...item, quantity: newQty } : item);
+      }
+      triggerToast(`¡Añadido al carrito: ${product.name}!`);
+      return [...prev, { product, quantity }];
+    });
+  };
+
+  const handleRemoveFromCart = (productId: string) => {
+    setCart(prev => {
+      const item = prev.find(i => i.product.id === productId);
+      if (item) {
+        triggerToast(`Eliminado del carrito: ${item.product.name}`);
+      }
+      return prev.filter(i => i.product.id !== productId);
+    });
+  };
+
+  const handleUpdateCartQuantity = (productId: string, quantity: number) => {
+    if (quantity <= 0) {
+      handleRemoveFromCart(productId);
+      return;
+    }
+    setCart(prev => prev.map(item => {
+      if (item.product.id === productId) {
+        const qty = Math.min(item.product.stock, quantity);
+        return { ...item, quantity: qty };
+      }
+      return item;
+    }));
+  };
+
+  const handleClearCart = () => {
+    setCart([]);
+    triggerToast("Carrito vaciado.");
+  };
+
+  const handleOrderSuccess = (orderId: string) => {
+    setTrackingOrderId(orderId);
+    setHasSavedOrder(true);
+    setIsCartOpen(false);
+    setCart([]); // Silent clear of the cart state
+    try {
+      localStorage.removeItem('copias_bella_vista_cart');
+    } catch (e) {
+      console.error("Error clearing cart storage", e);
+    }
+    triggerToast("¡Pedido registrado! Rastreando pedido en tiempo real...");
+  };
 
   // Global search & Filter states
   const [searchTerm, setSearchTerm] = useState('');
@@ -317,6 +410,17 @@ export default function App() {
     triggerToast("Filtros de catálogo restablecidos.");
   };
 
+  // Clear search filters only (keeping search term)
+  const handleClearFiltersOnly = () => {
+    setSelectedCategory('all');
+    setSelectedBrand('all');
+    setMinPrice(0);
+    setMaxPrice(1000);
+    setOnlyInStock(false);
+    setOnlyFeatured(false);
+    setOnlyOffers(false);
+  };
+
   // Helper to filter by category name keyword from menus/buttons
   const handleSelectCategoryByName = (keyword: string) => {
     // Try to find matching category by name or slug (case-insensitive)
@@ -378,6 +482,9 @@ export default function App() {
         setOnlyOffers={setOnlyOffers}
         onResetFilters={handleResetFilters}
         onSelectCategoryByName={handleSelectCategoryByName}
+        cartItemsCount={cart.reduce((acc, item) => acc + item.quantity, 0)}
+        onOpenCart={() => setIsCartOpen(true)}
+        onClearFiltersOnly={handleClearFiltersOnly}
       />
 
       {/* Main Application Body */}
@@ -510,6 +617,7 @@ export default function App() {
                             onViewDetails={(p) => setSelectedProduct(p)}
                             onShare={(p, e) => handleShareProduct(p, e)}
                             onWhatsAppQuery={(p, e) => handleWhatsAppQuery(p, e)}
+                            onAddToCart={(p, e) => handleAddToCart(p, 1)}
                           />
                         );
                       })}
@@ -539,29 +647,62 @@ export default function App() {
         )}
       </main>
 
-      {/* Floating Call to Action and back to top */}
-      <div className="fixed bottom-6 left-6 z-40 flex flex-col gap-2">
+      {/* Floating Call to Action on the left (WhatsApp) */}
+      <div className="fixed bottom-6 left-6 z-40 flex flex-col gap-2.5 items-start">
         <button
           onClick={() => {
             const encoded = encodeURIComponent("Hola Copias Bella Vista, me gustaría realizar una consulta sobre sus servicios.");
-            window.open(`https://api.whatsapp.com/send?phone=584125043857&text=${encoded}`, '_blank');
+            window.open(`https://api.whatsapp.com/send?phone=574125043857&text=${encoded}`, '_blank');
           }}
-          className="w-12 h-12 rounded-full bg-[#25D366] text-white flex items-center justify-center shadow-2xl hover:scale-110 transition cursor-pointer"
+          className="w-12 h-12 rounded-full bg-[#25D366] hover:bg-[#20ba56] text-white flex items-center justify-center shadow-2xl hover:scale-110 transition duration-200 cursor-pointer"
           title="Atención directa por WhatsApp"
+          id="btn-floating-whatsapp"
         >
           <Phone className="w-5 h-5 fill-current" />
         </button>
       </div>
 
-      {showBackToTop && (
+      {/* Floating Controls on the right (Information & Back to Top) */}
+      <div className="fixed bottom-6 right-6 z-40 flex flex-col gap-2.5 items-end">
+        {showBackToTop && (
+          <button
+            onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+            className="w-11 h-11 rounded-full bg-[#232F3E] text-white hover:bg-[#131921] border border-gray-700 flex items-center justify-center shadow-xl hover:scale-105 transition cursor-pointer"
+            title="Subir al inicio"
+          >
+            <ArrowUp className="w-5 h-5" />
+          </button>
+        )}
+
+        {/* Floating Tracking Shortcut */}
+        {hasSavedOrder && (
+          <button
+            onClick={() => {
+              const savedId = localStorage.getItem('copias_bellavista_last_order_id');
+              if (savedId) {
+                setTrackingOrderId(savedId);
+              }
+            }}
+            className="flex items-center gap-2 px-4 py-2.5 rounded-full bg-[#008296] hover:bg-[#006677] text-white font-black shadow-2xl hover:scale-105 transition duration-200 cursor-pointer text-xs uppercase tracking-wider border border-[#006677]"
+            title="Ver estado de mi último pedido"
+            id="btn-floating-tracking"
+          >
+            <Clock className="w-4 h-4 text-white animate-pulse" />
+            <span>Rastrear Pedido</span>
+          </button>
+        )}
+
+        {/* Botón de Información siempre a la vista */}
         <button
-          onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
-          className="fixed bottom-6 right-6 z-40 w-11 h-11 rounded-full bg-[#232F3E] text-white hover:bg-[#131921] border border-gray-700 flex items-center justify-center shadow-xl hover:scale-105 transition cursor-pointer"
-          title="Subir al inicio"
+          onClick={() => setIsInfoModalOpen(true)}
+          className="flex items-center gap-2 px-4 py-2.5 rounded-full bg-[#FF9900] hover:bg-[#e68a00] text-[#131921] font-black shadow-2xl hover:scale-105 transition duration-200 cursor-pointer text-xs uppercase tracking-wider border border-[#e68a00]"
+          title="Ver Información del Negocio"
+          id="btn-floating-info"
         >
-          <ArrowUp className="w-5 h-5" />
+          <Info className="w-4 h-4 text-[#131921] animate-pulse" />
+          <span>Información</span>
         </button>
-      )}
+      </div>
 
       {/* ====================================
           MODAL VIEWS OVERLAYS
@@ -578,6 +719,7 @@ export default function App() {
           onViewProduct={(p) => setSelectedProduct(p)}
           onShare={handleShareProduct}
           onWhatsAppQuery={handleWhatsAppQuery}
+          onAddToCart={handleAddToCart}
         />
       )}
 
@@ -585,6 +727,33 @@ export default function App() {
       {showSettingsModal && (
         <SettingsModal
           onClose={() => setShowSettingsModal(false)}
+        />
+      )}
+
+      {/* 3. SHOPPING CART DRAWER */}
+      <CartDrawer
+        isOpen={isCartOpen}
+        onClose={() => setIsCartOpen(false)}
+        cartItems={cart}
+        onUpdateQuantity={handleUpdateCartQuantity}
+        onRemoveItem={handleRemoveFromCart}
+        onClearCart={handleClearCart}
+        productImages={productImages}
+        onOrderSuccess={handleOrderSuccess}
+      />
+
+      {/* 4. BUSINESS INFORMATION MODAL */}
+      {isInfoModalOpen && (
+        <InfoModal
+          onClose={() => setIsInfoModalOpen(false)}
+        />
+      )}
+
+      {/* 5. ORDER TRACKING MODAL */}
+      {trackingOrderId && (
+        <OrderTrackingModal
+          orderId={trackingOrderId}
+          onClose={() => setTrackingOrderId(null)}
         />
       )}
 

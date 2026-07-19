@@ -58,3 +58,33 @@ export interface SystemSettings {
   supabaseAnonKey: string;
   useSupabase: boolean;
 }
+
+export interface CartItem {
+  product: Product;
+  quantity: number;
+}
+
+export interface Order {
+  id?: string;
+  customer_name: string;
+  phone_number: string;
+  delivery_method: 'b2c' | 'retiro';
+  address_text: string | null;
+  items: {
+    product_id: string;
+    name: string;
+    sku: string;
+    quantity: number;
+    price: number;
+  }[];
+  total_price: number;
+  status: string;
+  created_at?: string;
+  comments?: string | null;
+  payment_method?: 'pagomovil' | 'efectivo' | 'transferencia' | string | null;
+  payment_amount_with?: number | null;
+  payment_status?: string | null;
+  points?: number | null;
+  order_number?: number;
+}
+
