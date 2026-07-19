@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Share2, AlertTriangle, MessageCircle, Star, CheckCircle2 } from 'lucide-react';
+import { Share2, AlertTriangle, MessageCircle, Star, CheckCircle2, ShoppingCart } from 'lucide-react';
 import { Product } from '../types.ts';
 
 interface ProductCardProps {
@@ -10,6 +10,7 @@ interface ProductCardProps {
   onViewDetails: (p: Product) => void;
   onShare: (p: Product, e: React.MouseEvent) => void;
   onWhatsAppQuery: (p: Product, e: React.MouseEvent) => void;
+  onAddToCart?: (p: Product, e: React.MouseEvent) => void;
 }
 
 const ProductCard: React.FC<ProductCardProps> = ({
@@ -19,7 +20,8 @@ const ProductCard: React.FC<ProductCardProps> = ({
   images,
   onViewDetails,
   onShare,
-  onWhatsAppQuery
+  onWhatsAppQuery,
+  onAddToCart
 }) => {
   const [imageLoaded, setImageLoaded] = useState(false);
 
@@ -127,6 +129,28 @@ const ProductCard: React.FC<ProductCardProps> = ({
             formatPrice(product.price)
           )}
         </div>
+
+        {/* Add to Cart Button if onAddToCart is supplied */}
+        {onAddToCart && (
+          <div className="mt-2.5 pt-2 border-t border-gray-100">
+            {product.stock > 0 ? (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onAddToCart(product, e);
+                }}
+                className="w-full py-1.5 bg-[#FFD814] hover:bg-[#F7CA00] text-[#0F1111] font-bold text-xs rounded transition flex items-center justify-center gap-1.5 cursor-pointer shadow-xs border border-[#F2C200] active:scale-95 duration-150"
+              >
+                <ShoppingCart className="w-3.5 h-3.5" />
+                Añadir al Carrito
+              </button>
+            ) : (
+              <div className="w-full py-1.5 bg-gray-100 text-gray-400 font-medium text-xs rounded flex items-center justify-center gap-1 border border-gray-200">
+                Agotado
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );

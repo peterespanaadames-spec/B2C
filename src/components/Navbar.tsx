@@ -4,7 +4,7 @@
  */
 
 import React, { useState } from 'react';
-import { Search, MapPin, ShieldAlert, Laptop, UserCheck, Settings, RefreshCw } from 'lucide-react';
+import { Search, MapPin, ShieldAlert, Laptop, UserCheck, Settings, RefreshCw, ShoppingCart } from 'lucide-react';
 import { dbService, currentSettings } from '../lib/supabase.ts';
 
 interface NavbarProps {
@@ -21,6 +21,9 @@ interface NavbarProps {
   setOnlyOffers: (val: boolean) => void;
   onResetFilters: () => void;
   onSelectCategoryByName: (keyword: string) => void;
+  cartItemsCount: number;
+  onOpenCart: () => void;
+  onClearFiltersOnly?: () => void;
 }
 
 export default function Navbar({
@@ -36,7 +39,10 @@ export default function Navbar({
   onlyOffers,
   setOnlyOffers,
   onResetFilters,
-  onSelectCategoryByName
+  onSelectCategoryByName,
+  cartItemsCount,
+  onOpenCart,
+  onClearFiltersOnly
 }: NavbarProps) {
 
   const scrollToProducts = () => {
@@ -87,9 +93,13 @@ export default function Navbar({
           <input
             type="text"
             value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
+            onChange={(e) => {
+              setSearchTerm(e.target.value);
+              if (onClearFiltersOnly) onClearFiltersOnly();
+            }}
             onKeyDown={(e) => {
               if (e.key === 'Enter') {
+                if (onClearFiltersOnly) onClearFiltersOnly();
                 scrollToProducts();
               }
             }}
@@ -99,7 +109,10 @@ export default function Navbar({
           />
           <button 
             type="button"
-            onClick={scrollToProducts}
+            onClick={() => {
+              if (onClearFiltersOnly) onClearFiltersOnly();
+              scrollToProducts();
+            }}
             className="absolute right-0 top-0 h-full bg-[#FF9900] hover:bg-[#e68a00] text-[#131921] px-4 rounded-r flex items-center justify-center cursor-pointer transition-colors border-l border-gray-300"
           >
             <Search className="w-5 h-5 font-bold" />
@@ -108,6 +121,26 @@ export default function Navbar({
 
         {/* Action Controls */}
         <div className="flex items-center gap-4 justify-end w-full md:w-auto">
+          {/* Shopping Cart Button */}
+          {!isAdminView && (
+            <button
+              onClick={onOpenCart}
+              className="relative p-2 text-white hover:text-[#FF9900] transition cursor-pointer flex items-center gap-1.5 hover:scale-105 active:scale-95 duration-150 mr-1"
+              id="btn-navbar-cart"
+              title="Abrir Carrito"
+            >
+              <div className="relative">
+                <ShoppingCart className="w-6 h-6 text-white hover:text-[#FF9900] transition" />
+                {cartItemsCount > 0 && (
+                  <span className="absolute -top-1.5 -right-1.5 bg-[#FF9900] text-[#131921] text-[10px] font-black rounded-full h-4.5 w-4.5 flex items-center justify-center border-2 border-[#131921] animate-bounce">
+                    {cartItemsCount}
+                  </span>
+                )}
+              </div>
+              <span className="hidden sm:inline text-xs font-extrabold uppercase tracking-wider">Carrito</span>
+            </button>
+          )}
+
           {/* Admin Navigation Button */}
           {isAdminView ? (
             <button

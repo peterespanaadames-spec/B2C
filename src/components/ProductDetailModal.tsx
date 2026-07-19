@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { X, MessageCircle, Share2, Clipboard, Printer, CheckCircle2, AlertTriangle, ChevronRight, FileText, Download } from 'lucide-react';
+import { X, MessageCircle, Share2, Clipboard, Printer, CheckCircle2, AlertTriangle, ChevronRight, FileText, Download, ShoppingCart } from 'lucide-react';
 import { Product, Category, Brand, ProductImage } from '../types.ts';
 import { dbService } from '../lib/supabase.ts';
 
@@ -17,6 +17,7 @@ interface ProductDetailModalProps {
   onViewProduct: (product: Product) => void;
   onShare: (product: Product) => void;
   onWhatsAppQuery: (product: Product) => void;
+  onAddToCart?: (product: Product, quantity: number) => void;
 }
 
 export default function ProductDetailModal({
@@ -27,12 +28,14 @@ export default function ProductDetailModal({
   onClose,
   onViewProduct,
   onShare,
-  onWhatsAppQuery
+  onWhatsAppQuery,
+  onAddToCart
 }: ProductDetailModalProps) {
   const [productImages, setProductImages] = useState<ProductImage[]>([]);
   const [selectedImageIndex, setSelectedImageIndex] = useState(0);
   const [relatedProducts, setRelatedProducts] = useState<Product[]>([]);
   const [copiedLink, setCopiedLink] = useState(false);
+  const [quantity, setQuantity] = useState(1);
 
   const formatModalPrice = (price: number, size: 'large' | 'small' = 'large') => {
     const formattedPrice = price.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -431,6 +434,45 @@ export default function ProductDetailModal({
                   Ver / PDF
                 </button>
               </div>
+
+              {/* Quantity Selector & Add to Cart button */}
+              {product.stock > 0 && onAddToCart && (
+                <div className="flex flex-col sm:flex-row items-center gap-3 p-3 bg-gray-50 border border-gray-100 rounded-lg">
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] md:text-xs font-bold text-gray-500 uppercase tracking-wide">Cantidad:</span>
+                    <div className="flex items-center border border-gray-300 rounded bg-white">
+                      <button
+                        onClick={() => setQuantity(q => Math.max(1, q - 1))}
+                        disabled={quantity <= 1}
+                        className="px-2.5 py-0.5 text-gray-500 hover:text-gray-800 disabled:opacity-40 font-bold text-sm cursor-pointer"
+                      >
+                        -
+                      </button>
+                      <span className="px-3 py-0.5 text-xs font-bold text-gray-800 min-w-[1.5rem] text-center">
+                        {quantity}
+                      </span>
+                      <button
+                        onClick={() => setQuantity(q => Math.min(product.stock, q + 1))}
+                        disabled={quantity >= product.stock}
+                        className="px-2.5 py-0.5 text-gray-500 hover:text-gray-800 disabled:opacity-40 font-bold text-sm cursor-pointer"
+                      >
+                        +
+                      </button>
+                    </div>
+                  </div>
+                  
+                  <button
+                    onClick={() => {
+                      onAddToCart(product, quantity);
+                      onClose();
+                    }}
+                    className="flex-1 w-full py-2 bg-[#FFD814] hover:bg-[#F7CA00] text-[#0F1111] font-extrabold rounded text-xs md:text-sm transition flex items-center justify-center gap-1.5 cursor-pointer shadow border border-[#F2C200] active:scale-95"
+                  >
+                    <ShoppingCart className="w-3.5 h-3.5" />
+                    Añadir al Carrito
+                  </button>
+                </div>
+              )}
 
               {/* Action Buttons Grid */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 md:gap-3">
