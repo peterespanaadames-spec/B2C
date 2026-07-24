@@ -6,14 +6,15 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { 
   Package, LayoutGrid, CheckCircle2, AlertTriangle, 
-  Settings, HelpCircle, Phone, ArrowUp, Info, ShieldAlert, Lock
+  Settings, HelpCircle, Phone, ArrowUp, Info, ShieldAlert, Lock, Bell, ClipboardList
 } from 'lucide-react';
-import { Category, Brand, Product, ProductImage, CartItem } from './types';
+import { Category, Brand, Product, ProductImage, CartItem, Order } from './types';
 import { dbService } from './lib/supabase.ts';
 import Navbar from './components/Navbar.tsx';
 import Banner from './components/Banner.tsx';
 import Sidebar from './components/Sidebar.tsx';
 import ProductCard from './components/ProductCard.tsx';
+import AmazonCarousel from './components/AmazonCarousel.tsx';
 import ProductDetailModal from './components/ProductDetailModal.tsx';
 import AdminPanel from './components/AdminPanel.tsx';
 import SettingsModal from './components/SettingsModal.tsx';
@@ -21,10 +22,60 @@ import CartDrawer from './components/CartDrawer.tsx';
 import InfoModal from './components/InfoModal.tsx';
 import OrderTrackingModal from './components/OrderTrackingModal.tsx';
 import { Clock } from 'lucide-react';
+import { CurrencyCode, DEFAULT_RATES } from './lib/currency';
 
 export default function App() {
+  // Multi-Currency State
+  const [activeCurrency, setActiveCurrency] = useState<CurrencyCode>('USD');
+  const [currencyRates, setCurrencyRates] = useState<Record<CurrencyCode, number>>(DEFAULT_RATES);
+
+  // Load currency rates from database on mount
+  useEffect(() => {
+    const loadRates = async () => {
+      try {
+        const newRates = { ...DEFAULT_RATES };
+        
+        // 1. Load general currency rates
+        const rates = await dbService.getAllCurrencyRates();
+        if (rates && rates.length > 0) {
+          rates.forEach((r: any) => {
+            if (r.code in newRates) {
+              newRates[r.code as CurrencyCode] = r.rate;
+            }
+          });
+        }
+
+        // 2. Query and overlay the latest specific BCV rate from the bcv_rates table
+        const latestBcv = await dbService.getLatestBcvRate();
+        if (latestBcv && latestBcv.rate) {
+          newRates.VES = latestBcv.rate;
+        }
+
+        setCurrencyRates(newRates);
+      } catch (err) {
+        console.error("Error loading currency rates:", err);
+      }
+    };
+    loadRates();
+  }, []);
+
+  // Update a currency rate and persist to database
+  const updateCurrencyRate = async (code: string, rate: number) => {
+    try {
+      await dbService.updateCurrencyRate(code, rate, 'Pedro (Admin)');
+      setCurrencyRates(prev => ({
+        ...prev,
+        [code as CurrencyCode]: rate
+      }));
+    } catch (err) {
+      console.error("Error updating currency rate:", err);
+      alert("Error al actualizar la tasa de cambio.");
+    }
+  };
+
   // Database states
   const [products, setProducts] = useState<Product[]>([]);
+  const [allProductsForCarousel, setAllProductsForCarousel] = useState<Product[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [brands, setBrands] = useState<Brand[]>([]);
   const [productImages, setProductImages] = useState<ProductImage[]>([]);
@@ -33,16 +84,98 @@ export default function App() {
   // Tracking Order States
   const [trackingOrderId, setTrackingOrderId] = useState<string | null>(null);
   const [hasSavedOrder, setHasSavedOrder] = useState(false);
+  const [activeOrders, setActiveOrders] = useState<Order[]>([]);
+  const [adminOrders, setAdminOrders] = useState<Order[]>([]);
+  const [adminTab, setAdminTab] = useState<'products' | 'categories' | 'brands' | 'orders'>('products');
+  const [adminMenu, setAdminMenu] = useState<'orders' | 'products' | 'sales' | 'audit' | 'settings' | 'caja' | 'clientes' | 'marketing' | 'proveedores' | 'compras' | 'reportes'>('orders');
+
+  const checkAdminOrders = async () => {
+    try {
+      const data = await dbService.getOrders();
+      setAdminOrders(data || []);
+    } catch (err) {
+      console.error("Error fetching admin orders in App.tsx:", err);
+    }
+  };
+
+  const checkActiveOrders = async () => {
+    const savedIdsStr = localStorage.getItem('copias_bellavista_order_ids');
+    const lastId = localStorage.getItem('copias_bellavista_last_order_id');
+    
+    let ids: string[] = [];
+    if (savedIdsStr) {
+      try {
+        ids = JSON.parse(savedIdsStr);
+      } catch (_) {}
+    }
+    if (lastId && !ids.includes(lastId)) {
+      ids.push(lastId);
+    }
+
+    if (ids.length === 0) {
+      setActiveOrders([]);
+      setHasSavedOrder(false);
+      return;
+    }
+
+    try {
+      const ordersData = await Promise.all(
+        ids.map(async (id) => {
+          try {
+            return await dbService.getOrder(id);
+          } catch (err) {
+            console.error(`Error fetching order ${id}:`, err);
+            return null;
+          }
+        })
+      );
+
+      const active = ordersData.filter((o): o is Order => {
+        if (!o) return false;
+        const status = (o.status || '').toLowerCase();
+        return status !== 'entregado' && status !== 'cancelado';
+      });
+
+      setActiveOrders(active);
+      setHasSavedOrder(active.length > 0);
+    } catch (err) {
+      console.error("Error checking active orders:", err);
+    }
+  };
 
   useEffect(() => {
+    checkActiveOrders();
+    checkAdminOrders();
+
     const savedId = localStorage.getItem('copias_bellavista_last_order_id');
     if (savedId) {
-      setHasSavedOrder(true);
+      const savedIdsStr = localStorage.getItem('copias_bellavista_order_ids') || '[]';
+      let ids: string[] = [];
+      try {
+        ids = JSON.parse(savedIdsStr);
+      } catch (_) {}
+      if (!ids.includes(savedId)) {
+        ids.push(savedId);
+        localStorage.setItem('copias_bellavista_order_ids', JSON.stringify(ids));
+      }
     }
+
+    const interval = setInterval(() => {
+      checkActiveOrders();
+      checkAdminOrders();
+    }, 10000);
+
+    return () => clearInterval(interval);
   }, []);
 
   // Layout and view states
   const [activeRole, setActiveRole] = useState<'admin' | 'vendedor' | 'cliente'>('cliente');
+
+  useEffect(() => {
+    if (activeRole === 'admin') {
+      checkAdminOrders();
+    }
+  }, [activeRole]);
   const [isAdminView, setIsAdminView] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [showSettingsModal, setShowSettingsModal] = useState(false);
@@ -116,8 +249,21 @@ export default function App() {
   };
 
   const handleOrderSuccess = (orderId: string) => {
+    // Add the new order ID to our list in localStorage
+    const savedIdsStr = localStorage.getItem('copias_bellavista_order_ids') || '[]';
+    let ids: string[] = [];
+    try {
+      ids = JSON.parse(savedIdsStr);
+    } catch (_) {}
+    if (!ids.includes(orderId)) {
+      ids.push(orderId);
+      localStorage.setItem('copias_bellavista_order_ids', JSON.stringify(ids));
+    }
+    localStorage.setItem('copias_bellavista_last_order_id', orderId);
+
     setTrackingOrderId(orderId);
-    setHasSavedOrder(true);
+    checkActiveOrders(); // Immediately fetch to update active orders state!
+    
     setIsCartOpen(false);
     setCart([]); // Silent clear of the cart state
     try {
@@ -149,14 +295,16 @@ export default function App() {
 
   const loadGlobalData = async () => {
     try {
-      const [cats, brs, imgs] = await Promise.all([
+      const [cats, brs, imgs, prods] = await Promise.all([
         dbService.getCategories(),
         dbService.getBrands(),
-        dbService.getProductImages()
+        dbService.getProductImages(),
+        dbService.getProducts()
       ]);
       setCategories(cats);
       setBrands(brs);
       setProductImages(imgs);
+      setAllProductsForCarousel(prods || []);
     } catch (e) {
       console.error("Error loading application data:", e);
     }
@@ -322,14 +470,23 @@ export default function App() {
     };
   }, []);
 
-  // Deep linking: check URL for a shared product
+  // Deep linking: check URL for a shared product or order tracking
   useEffect(() => {
     let active = true;
     const checkDeepLink = async () => {
       const params = new URLSearchParams(window.location.search);
       const productSlug = params.get('producto') || params.get('p');
+      const orderIdParam = params.get('pedido') || params.get('orderId');
       const hash = window.location.hash;
       
+      if (orderIdParam) {
+        setTrackingOrderId(orderIdParam);
+        // Clear param from URL cleanly so it doesn't reopen repeatedly on refresh
+        const cleanUrl = window.location.protocol + "//" + window.location.host + window.location.pathname;
+        window.history.replaceState({ path: cleanUrl }, '', cleanUrl);
+        return;
+      }
+
       let slug = productSlug;
       if (!slug && hash.includes('#/producto/')) {
         slug = hash.split('#/producto/')[1];
@@ -444,18 +601,38 @@ export default function App() {
       setOnlyFeatured(false);
       triggerToast(`Buscando artículos de "${keyword}"`);
     }
+
+    // Smooth scroll down to the products section so user sees them immediately
+    setTimeout(() => {
+      const el = document.getElementById('products-display-section');
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth' });
+      }
+    }, 150);
   };
 
   const handleRefreshAdminData = () => {
     loadGlobalData();
+    checkAdminOrders();
     if (isAdminView) {
       setLoading(true);
       dbService.getProducts().then(prods => {
         setProducts(prods);
+        setAllProductsForCarousel(prods || []);
         setLoading(false);
       });
     }
   };
+
+  const newOrdersList = adminOrders.filter(o => {
+    const s = (o.status || '').toLowerCase();
+    return s === 'recibido' || s === 'pendiente';
+  });
+
+  const pendingOrdersList = adminOrders.filter(o => {
+    const s = (o.status || '').toLowerCase();
+    return s !== 'entregado' && s !== 'cancelado';
+  });
 
   return (
     <div className="min-h-screen bg-[#EAEDED] flex flex-col font-sans text-[#0F1111]">
@@ -485,10 +662,75 @@ export default function App() {
         cartItemsCount={cart.reduce((acc, item) => acc + item.quantity, 0)}
         onOpenCart={() => setIsCartOpen(true)}
         onClearFiltersOnly={handleClearFiltersOnly}
+        activeCurrency={activeCurrency}
+        onCurrencyChange={setActiveCurrency}
+        currencyRates={currencyRates}
       />
 
       {/* Main Application Body */}
-      <main className="flex-1 py-6 max-w-7xl mx-auto px-4 w-full">
+      <main className={`flex-1 py-6 w-full relative z-10 ${isAdminView ? 'w-full px-4 md:px-6' : 'max-w-[1480px] mx-auto px-4 md:px-6'}`}>
+        {/* Administrator & Manager Real-time Alert Banner */}
+        {activeRole === 'admin' && (newOrdersList.length > 0 || pendingOrdersList.length > 0) && (
+          <div className="mb-6 bg-[#131921] text-white rounded-xl border-l-4 border-red-600 shadow-2xl p-4 md:p-5 select-none animate-fadeIn flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+            {/* Left section: Info & Messages */}
+            <div className="flex items-start gap-3 md:gap-4">
+              <div className="p-2.5 bg-[#232F3E] text-[#FF9900] rounded-lg border border-gray-700 animate-pulse shrink-0">
+                <Bell className="w-6 h-6 animate-swing" />
+              </div>
+              <div className="space-y-1 text-left">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="bg-red-600 text-white text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full animate-pulse">
+                    ALERTA DE GERENCIA
+                  </span>
+                  <span className="text-gray-400 font-extrabold text-[10px] uppercase tracking-wider">
+                    Panel de Administración • En Tiempo Real
+                  </span>
+                  {/* Blinking Live indicator */}
+                  <span className="inline-flex items-center gap-1 text-[10px] text-emerald-400 font-black uppercase tracking-widest">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping inline-block" />
+                    En vivo
+                  </span>
+                </div>
+                
+                <h3 className="text-sm md:text-base font-black text-white leading-snug">
+                  {newOrdersList.length > 0 && (
+                    <span>
+                      ¡Tienes <strong className="text-[#FF9900]">{newOrdersList.length} nuevo(s) pedido(s)</strong> sin procesar!{' '}
+                    </span>
+                  )}
+                  {pendingOrdersList.length > 0 && (
+                    <span className={newOrdersList.length > 0 ? 'border-l border-gray-700 pl-2 ml-1' : ''}>
+                      Falta completar el proceso de <strong className="text-sky-400">{pendingOrdersList.length} pedido(s) activo(s)</strong> con el cliente.
+                    </span>
+                  )}
+                </h3>
+                
+                <p className="text-[11px] text-gray-400 leading-normal font-semibold">
+                  Atención Administrador / Gerente: Por favor, revisa y gestiona las solicitudes de los clientes para garantizar tiempos de entrega rápidos y actualizar las fases de preparación.
+                </p>
+              </div>
+            </div>
+
+            {/* Right section: Action Buttons */}
+            <div className="flex items-center gap-2 w-full md:w-auto self-stretch md:self-auto shrink-0">
+              <button
+                onClick={() => {
+                  setIsAdminView(true);
+                  setAdminMenu('orders');
+                  setTimeout(() => {
+                    const el = document.getElementById('btn-tab-orders') || document.getElementById('products-display-section');
+                    if (el) el.scrollIntoView({ behavior: 'smooth' });
+                  }, 100);
+                }}
+                className="flex-1 md:flex-initial px-4.5 py-2.5 bg-[#FF9900] hover:bg-[#e68a00] text-[#131921] text-xs font-black rounded-lg transition duration-200 uppercase tracking-wider flex items-center justify-center gap-1.5 shadow-md cursor-pointer"
+              >
+                <ClipboardList className="w-4 h-4 shrink-0" />
+                Gestionar Pedidos
+              </button>
+            </div>
+          </div>
+        )}
+
         {isAdminView ? (
           /* ADMINISTRATIVE MODULE VIEW */
           <AdminPanel
@@ -498,19 +740,28 @@ export default function App() {
             productImages={productImages}
             onRefreshData={handleRefreshAdminData}
             activeRole={activeRole}
+            initialTab={adminTab}
+            initialMenu={adminMenu}
+            onTabChange={(tab) => setAdminTab(tab)}
+            activeCurrency={activeCurrency}
+            onCurrencyChange={setActiveCurrency}
+            currencyRates={currencyRates}
+            onUpdateCurrencyRate={updateCurrencyRate}
           />
         ) : (
           /* PUBLIC MARKETPLACE VIEW */
           <>
-            {/* Header Banner */}
-            <div className="block">
-              <Banner 
-                onSelectCategoryByName={handleSelectCategoryByName}
-                setOnlyOffers={setOnlyOffers}
-                products={products}
-                productImages={productImages}
+            {/* Amazon-style Categories & Featured Carousel */}
+            <div className="relative z-20 mb-6">
+              <AmazonCarousel
+                products={allProductsForCarousel.length > 0 ? allProductsForCarousel : products}
                 categories={categories}
-                onViewProduct={(p) => setSelectedProduct(p)}
+                productImages={productImages}
+                onViewDetails={(p) => setSelectedProduct(p)}
+                onAddToCart={(p, e) => handleAddToCart(p, 1)}
+                activeCurrency={activeCurrency}
+                currencyRates={currencyRates}
+                onSelectCategoryByName={handleSelectCategoryByName}
               />
             </div>
 
@@ -567,7 +818,7 @@ export default function App() {
 
                 {/* Loading indicator */}
                 {loading ? (
-                  <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-6">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6">
                     {/* Skeletons para carga inicial */}
                     {[...Array(8)].map((_, i) => (
                       <div key={`skeleton-${i}`} className="bg-white rounded-lg shadow border border-gray-100 overflow-hidden flex flex-col h-[320px] animate-pulse">
@@ -599,7 +850,7 @@ export default function App() {
                 ) : (
                   /* Standard Grid */
                   <>
-                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-6">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6">
                       {products.map((product) => {
                         const category = categories.find(c => c.id === product.category_id);
                         const brand = brands.find(b => b.id === product.brand_id);
@@ -618,6 +869,8 @@ export default function App() {
                             onShare={(p, e) => handleShareProduct(p, e)}
                             onWhatsAppQuery={(p, e) => handleWhatsAppQuery(p, e)}
                             onAddToCart={(p, e) => handleAddToCart(p, 1)}
+                            activeCurrency={activeCurrency}
+                            currencyRates={currencyRates}
                           />
                         );
                       })}
@@ -678,9 +931,13 @@ export default function App() {
         {hasSavedOrder && (
           <button
             onClick={() => {
-              const savedId = localStorage.getItem('copias_bellavista_last_order_id');
-              if (savedId) {
-                setTrackingOrderId(savedId);
+              if (activeOrders.length > 0 && activeOrders[0].id) {
+                setTrackingOrderId(activeOrders[0].id);
+              } else {
+                const savedId = localStorage.getItem('copias_bellavista_last_order_id');
+                if (savedId) {
+                  setTrackingOrderId(savedId);
+                }
               }
             }}
             className="flex items-center gap-2 px-4 py-2.5 rounded-full bg-[#008296] hover:bg-[#006677] text-white font-black shadow-2xl hover:scale-105 transition duration-200 cursor-pointer text-xs uppercase tracking-wider border border-[#006677]"
@@ -720,6 +977,8 @@ export default function App() {
           onShare={handleShareProduct}
           onWhatsAppQuery={handleWhatsAppQuery}
           onAddToCart={handleAddToCart}
+          activeCurrency={activeCurrency}
+          currencyRates={currencyRates}
         />
       )}
 
@@ -740,6 +999,8 @@ export default function App() {
         onClearCart={handleClearCart}
         productImages={productImages}
         onOrderSuccess={handleOrderSuccess}
+        activeCurrency={activeCurrency}
+        currencyRates={currencyRates}
       />
 
       {/* 4. BUSINESS INFORMATION MODAL */}
@@ -753,13 +1014,18 @@ export default function App() {
       {trackingOrderId && (
         <OrderTrackingModal
           orderId={trackingOrderId}
-          onClose={() => setTrackingOrderId(null)}
+          onClose={() => {
+            setTrackingOrderId(null);
+            checkActiveOrders();
+          }}
+          activeOrders={activeOrders}
+          onRefreshActiveOrders={checkActiveOrders}
         />
       )}
 
       {/* Footer Area */}
       <footer className="bg-[#131921] text-white py-10 border-t-4 border-[#FF9900] select-none text-xs">
-        <div className="max-w-7xl mx-auto px-4 grid grid-cols-1 md:grid-cols-3 gap-8 text-left">
+        <div className="max-w-[1480px] mx-auto px-4 md:px-6 grid grid-cols-1 md:grid-cols-3 gap-8 text-left">
           
           {/* Col 1 */}
           <div>
@@ -863,7 +1129,7 @@ export default function App() {
 
         </div>
 
-        <div className="max-w-7xl mx-auto px-4 mt-8 pt-6 border-t border-gray-800 text-center text-gray-500 font-semibold flex flex-col sm:flex-row justify-between items-center gap-4">
+        <div className="max-w-[1480px] mx-auto px-4 md:px-6 mt-8 pt-6 border-t border-gray-800 text-center text-gray-500 font-semibold flex flex-col sm:flex-row justify-between items-center gap-4">
           <p>© 2026 Copias Bella Vista. Todos los derechos reservados. Barinitas, Venezuela.</p>
           <p className="text-[10px]">Diseñado y desarrollado por Google AI Studio</p>
         </div>

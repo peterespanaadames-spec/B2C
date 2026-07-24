@@ -68,6 +68,7 @@ export interface Order {
   id?: string;
   customer_name: string;
   phone_number: string;
+  customer_email?: string | null;
   delivery_method: 'b2c' | 'retiro';
   address_text: string | null;
   items: {
