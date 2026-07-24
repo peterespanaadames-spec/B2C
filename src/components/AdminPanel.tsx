@@ -9,9 +9,9 @@ import {
   BarChart, Package, Tag, Layers, ToggleLeft, ToggleRight, 
   Plus, Edit3, Trash2, Check, AlertTriangle, Printer, Star, Search, Image as ImageIcon, FileText, X, Upload, Download,
   ClipboardList, RefreshCw, Eye, Coins, Truck, Store, Calendar, HelpCircle, Clock, Timer,
-  LayoutDashboard, ShieldCheck, Settings, Activity, ArrowRight, Sparkles, TrendingUp, Users
-, LogOut, Megaphone, ShoppingCart } from 'lucide-react';
-import { Product, Category, Brand, ProductImage, Order } from '../types.ts';
+  LayoutDashboard, ShieldCheck, Settings, Activity, ArrowRight, Sparkles, TrendingUp, Users,
+  Lock, Unlock, LogOut, Megaphone, ShoppingCart } from 'lucide-react';
+import { Product, Category, Brand, ProductImage, Order, Provider } from '../types.ts';
 import { dbService } from '../lib/supabase.ts';
 import * as XLSX from 'xlsx';
 import { CurrencyCode, CURRENCIES } from '../lib/currency';
@@ -134,15 +134,33 @@ export default function AdminPanel({
   const [posSuccessMsg, setPosSuccessMsg] = useState<string | null>(null);
 
   // Cash / Caja States
-  const [cashOps, setCashOps] = useState<any[]>([
-    { id: 1, type: 'ingreso', concept: 'Apertura de Caja - Fondo Inicial', amount: 50.00, time: '08:00 AM' },
-    { id: 2, type: 'egreso', concept: 'Pago de Delivery - Suministros Rápidos', amount: 8.50, time: '11:30 AM' },
-    { id: 3, type: 'ingreso', concept: 'Venta Directa POS FAC-2026-001', amount: 15.50, time: '12:15 PM' }
-  ]);
+  const [cashOps, setCashOps] = useState<any[]>([]);
+  const [cashSessions, setCashSessions] = useState<any[]>([]);
+  const [activeSession, setActiveSession] = useState<any | null>(null);
+
+  const [showOpenCajaModal, setShowOpenCajaModal] = useState<boolean>(false);
+  const [showCloseCajaModal, setShowCloseCajaModal] = useState<boolean>(false);
+  const [openCajaAmountBs, setOpenCajaAmountBs] = useState<string>('10.00');
+  const [closeCajaAmountBs, setCloseCajaAmountBs] = useState<string>('');
+  const [cajaObservaciones, setCajaObservaciones] = useState<string>('');
+
   const [newOpConcept, setNewOpConcept] = useState<string>('');
   const [newOpAmount, setNewOpAmount] = useState<string>('');
   const [newOpType, setNewOpType] = useState<'ingreso' | 'egreso'>('ingreso');
   const [cajaSuccessMsg, setCajaSuccessMsg] = useState<string | null>(null);
+
+  const fetchCajaData = async () => {
+    try {
+      const sessions = await dbService.getCashSessions();
+      const ops = await dbService.getCashOps();
+      const active = await dbService.getActiveCashSession();
+      setCashSessions(sessions);
+      setCashOps(ops);
+      setActiveSession(active);
+    } catch (e) {
+      console.error("Error fetching Caja data:", e);
+    }
+  };
 
   // Configuration States
   const [configStoreName, setConfigStoreName] = useState<string>('Papelería & Suministros Bella Vista, C.A.');
@@ -150,6 +168,63 @@ export default function AdminPanel({
   const [configIva, setConfigIva] = useState<number>(16);
   const [configPhone, setConfigPhone] = useState<string>('+58 412-5551234');
   const [configSaved, setConfigSaved] = useState<boolean>(false);
+
+  // Global Delivery & Payment methods disable configuration states
+  const [disableDeliveryB2C, setDisableDeliveryB2C] = useState<boolean>(() => {
+    try {
+      const saved = localStorage.getItem('copias_bellavista_disabled_settings');
+      if (saved) return JSON.parse(saved).delivery_b2c === true;
+    } catch (e) {}
+    return false;
+  });
+
+  const [disableDeliveryRetiro, setDisableDeliveryRetiro] = useState<boolean>(() => {
+    try {
+      const saved = localStorage.getItem('copias_bellavista_disabled_settings');
+      if (saved) return JSON.parse(saved).delivery_retiro === true;
+    } catch (e) {}
+    return false;
+  });
+
+  const [disablePayPagomovil, setDisablePayPagomovil] = useState<boolean>(() => {
+    try {
+      const saved = localStorage.getItem('copias_bellavista_disabled_settings');
+      if (saved) return JSON.parse(saved).pay_pagomovil === true;
+    } catch (e) {}
+    return false;
+  });
+
+  const [disablePayEfectivo, setDisablePayEfectivo] = useState<boolean>(() => {
+    try {
+      const saved = localStorage.getItem('copias_bellavista_disabled_settings');
+      if (saved) return JSON.parse(saved).pay_efectivo === true;
+    } catch (e) {}
+    return false;
+  });
+
+  const [disablePayTransferencia, setDisablePayTransferencia] = useState<boolean>(() => {
+    try {
+      const saved = localStorage.getItem('copias_bellavista_disabled_settings');
+      if (saved) return JSON.parse(saved).pay_transferencia === true;
+    } catch (e) {}
+    return false;
+  });
+
+  const [disablePayPunto, setDisablePayPunto] = useState<boolean>(() => {
+    try {
+      const saved = localStorage.getItem('copias_bellavista_disabled_settings');
+      if (saved) return JSON.parse(saved).pay_punto === true;
+    } catch (e) {}
+    return false;
+  });
+
+  const [disablePayOtras, setDisablePayOtras] = useState<boolean>(() => {
+    try {
+      const saved = localStorage.getItem('copias_bellavista_disabled_settings');
+      if (saved) return JSON.parse(saved).pay_otras === true;
+    } catch (e) {}
+    return false;
+  });
 
   const [chartView, setChartView] = useState<'days' | 'months'>('days');
   const [activeTab, setActiveTab] = useState<'products' | 'categories' | 'brands' | 'orders'>(initialTab || 'products');
@@ -171,6 +246,7 @@ export default function AdminPanel({
   useEffect(() => {
     fetchOrders();
     fetchBcvRate();
+    fetchCajaData();
   }, []);
 
   const handleTabClick = (tab: 'products' | 'categories' | 'brands' | 'orders') => {
@@ -231,6 +307,106 @@ export default function AdminPanel({
     } finally {
       setLoadingClients(false);
     }
+  };
+
+  // --- Providers State ---
+  const [providers, setProviders] = useState<Provider[]>([]);
+  const [loadingProviders, setLoadingProviders] = useState<boolean>(false);
+  const [providerSearch, setProviderSearch] = useState<string>('');
+  const [showProviderModal, setShowProviderModal] = useState<boolean>(false);
+  const [selectedProviderForEdit, setSelectedProviderForEdit] = useState<Provider | null>(null);
+
+  // Form State
+  const [providerFormCode, setProviderFormCode] = useState<string>('');
+  const [providerFormName, setProviderFormName] = useState<string>('');
+  const [providerFormRif, setProviderFormRif] = useState<string>('');
+  const [providerFormType, setProviderFormType] = useState<string>('Jurídico');
+  const [providerFormPhone, setProviderFormPhone] = useState<string>('');
+  const [providerFormBankName, setProviderFormBankName] = useState<string>('');
+
+  const filteredProviders = providers.filter(p => {
+    const q = providerSearch.toLowerCase().trim();
+    if (!q) return true;
+    return (
+      (p.name || '').toLowerCase().includes(q) ||
+      (p.code || '').toLowerCase().includes(q) ||
+      (p.rif || '').toLowerCase().includes(q) ||
+      (p.phone || '').toLowerCase().includes(q) ||
+      (p.bank_name || '').toLowerCase().includes(q)
+    );
+  });
+
+  const fetchProviders = async () => {
+    setLoadingProviders(true);
+    try {
+      const data = await dbService.getProviders();
+      setProviders(data);
+    } catch (e) {
+      console.error("Error loading providers:", e);
+    } finally {
+      setLoadingProviders(false);
+    }
+  };
+
+  const handleSaveProvider = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      const generatedCode = providerFormCode.trim() || `PROV-${Math.floor(100 + Math.random() * 900)}`;
+      const providerData = {
+        code: generatedCode,
+        name: providerFormName.trim(),
+        rif: providerFormRif.trim(),
+        type: providerFormType,
+        phone: providerFormPhone.trim(),
+        bank_name: providerFormBankName.trim()
+      };
+
+      if (selectedProviderForEdit) {
+        await dbService.updateProvider(selectedProviderForEdit.id, providerData);
+      } else {
+        await dbService.createProvider(providerData);
+      }
+
+      setShowProviderModal(false);
+      setSelectedProviderForEdit(null);
+      fetchProviders();
+    } catch (err: any) {
+      console.error("Error saving provider:", err);
+      alert("Error al guardar proveedor: " + err.message);
+    }
+  };
+
+  const handleDeleteProvider = async (id: string, name: string) => {
+    if (!confirm(`¿Está seguro de eliminar al proveedor "${name}"?`)) return;
+    try {
+      await dbService.deleteProvider(id);
+      fetchProviders();
+    } catch (err: any) {
+      console.error("Error deleting provider:", err);
+      alert("Error al eliminar proveedor: " + err.message);
+    }
+  };
+
+  const openAddProviderModal = () => {
+    setSelectedProviderForEdit(null);
+    setProviderFormCode(`PROV-${Math.floor(100 + Math.random() * 900)}`);
+    setProviderFormName('');
+    setProviderFormRif('');
+    setProviderFormType('Jurídico');
+    setProviderFormPhone('');
+    setProviderFormBankName('');
+    setShowProviderModal(true);
+  };
+
+  const openEditProviderModal = (provider: Provider) => {
+    setSelectedProviderForEdit(provider);
+    setProviderFormCode(provider.code || '');
+    setProviderFormName(provider.name);
+    setProviderFormRif(provider.rif);
+    setProviderFormType(provider.type || 'Jurídico');
+    setProviderFormPhone(provider.phone || '');
+    setProviderFormBankName(provider.bank_name || '');
+    setShowProviderModal(true);
   };
 
   const handleSaveClient = async (e: React.FormEvent) => {
@@ -296,6 +472,9 @@ export default function AdminPanel({
   useEffect(() => {
     if (currentMenu === 'clientes') {
       fetchClients();
+    }
+    if (currentMenu === 'proveedores') {
+      fetchProviders();
     }
   }, [currentMenu]);
 
@@ -384,7 +563,7 @@ export default function AdminPanel({
       const oldStatus = (orderObj?.status || '').toLowerCase();
       const newStatus = (changes.status || '').toLowerCase();
 
-      // If status transitions to 'entregado', subtract from inventory
+      // If status transitions to 'entregado', subtract from inventory and register income in Cash register (Caja)
       if (changes.status !== undefined && newStatus === 'entregado' && oldStatus !== 'entregado' && orderObj && Array.isArray(orderObj.items)) {
         for (const item of orderObj.items) {
           const prod = products.find(p => p.id === item.product_id);
@@ -396,6 +575,20 @@ export default function AdminPanel({
         }
         if (onRefreshData) {
           onRefreshData();
+        }
+
+        // Register income in cash register (Caja)
+        try {
+          const amountBs = (orderObj.total_price || 0) * bcvRate;
+          await dbService.addCashOp({
+            type: 'ingreso',
+            concept: `Venta Online - Pedido #${String(orderObj.order_number || '').padStart(6, '0')} (${orderObj.customer_name})`,
+            amount: orderObj.total_price || 0,
+            amount_bs: amountBs
+          });
+          await fetchCajaData();
+        } catch (cajaErr) {
+          console.error("Failed to register online order income in cash register:", cajaErr);
         }
       }
 
@@ -1545,154 +1738,588 @@ export default function AdminPanel({
           {/* VIEW: CAJA Y ARQUEO */}
           {currentMenu === 'caja' && (
             <div className="space-y-6 text-left">
-              <div>
-                <h2 className="text-xl font-black text-[#131921] uppercase tracking-tight flex items-center gap-2">
-                  <Store className="w-6 h-6 text-amber-600" />
-                  <span>Control de Caja y Arqueo</span>
-                </h2>
-                <p className="text-xs text-gray-500 font-medium">
-                  Monitoreo de ingresos y egresos diarios, control de fondo fijo, y verificación de balances en dólares y bolívares.
-                </p>
-              </div>
+              {/* Calculations Helpers */}
+              {(() => {
+                const formatBs = (num: number | null | undefined) => {
+                  if (num === null || num === undefined) return '—';
+                  return new Intl.NumberFormat('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(num) + ' Bs.';
+                };
 
-              {/* Cash boxes */}
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <div className="bg-emerald-50/50 border border-emerald-100 rounded-xl p-4">
-                  <p className="text-[10px] text-gray-400 font-black uppercase tracking-wider">Fondo Inicial</p>
-                  <p className="text-xl font-black text-emerald-800">$50.00</p>
-                </div>
-                <div className="bg-blue-50/50 border border-blue-100 rounded-xl p-4">
-                  <p className="text-[10px] text-gray-400 font-black uppercase tracking-wider">Ingresos en Caja</p>
-                  <p className="text-xl font-black text-blue-800">
-                    ${(cashOps.filter(o => o.type === 'ingreso').reduce((acc, curr) => acc + curr.amount, 0)).toFixed(2)}
-                  </p>
-                </div>
-                <div className="bg-rose-50/50 border border-rose-100 rounded-xl p-4">
-                  <p className="text-[10px] text-gray-400 font-black uppercase tracking-wider">Egresos en Caja</p>
-                  <p className="text-xl font-black text-rose-800">
-                    -${(cashOps.filter(o => o.type === 'egreso').reduce((acc, curr) => acc + curr.amount, 0)).toFixed(2)}
-                  </p>
-                </div>
-                <div className="bg-amber-50/50 border border-amber-100 rounded-xl p-4">
-                  <p className="text-[10px] text-gray-400 font-black uppercase tracking-wider">Saldo Neto en Caja</p>
-                  <p className="text-xl font-black text-amber-800">
-                    ${(50.00 + cashOps.filter(o => o.type === 'ingreso').reduce((acc, curr) => acc + curr.amount, 0) - cashOps.filter(o => o.type === 'egreso').reduce((acc, curr) => acc + curr.amount, 0)).toFixed(2)}
-                  </p>
-                </div>
-              </div>
+                const formatUSD = (num: number | null | undefined) => {
+                  if (num === null || num === undefined) return '—';
+                  return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(num);
+                };
 
-              {/* Add Cash Movement Form */}
-              <div className="bg-gray-50 border border-gray-150 rounded-2xl p-5">
-                <h3 className="text-sm font-extrabold uppercase text-gray-800 mb-3">Registrar Movimiento de Caja Manual</h3>
-                
-                {cajaSuccessMsg && (
-                  <div className="mb-4 p-3 bg-emerald-100 border border-emerald-200 text-emerald-800 text-xs font-bold rounded-lg flex items-center gap-2">
-                    <Check className="w-4 h-4 shrink-0" />
-                    <span>{cajaSuccessMsg}</span>
-                  </div>
-                )}
+                // Filter operations for current session
+                const activeSessionOps = activeSession 
+                  ? cashOps.filter((op: any) => op.session_id === activeSession.id) 
+                  : [];
 
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                  <div>
-                    <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1">Concepto o Descripción</label>
-                    <input
-                      type="text"
-                      placeholder="Ej. Pago de Almuerzos"
-                      value={newOpConcept}
-                      onChange={(e) => setNewOpConcept(e.target.value)}
-                      className="w-full p-2 bg-white border border-gray-300 rounded-lg text-xs font-semibold text-gray-700"
-                    />
-                  </div>
+                const initialFondoBs = activeSession ? activeSession.apertura_bs : 0;
+                const initialFondoUsd = activeSession ? activeSession.apertura_usd : 0;
 
-                  <div>
-                    <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1">Monto ($ USD)</label>
-                    <input
-                      type="number"
-                      step="0.01"
-                      placeholder="Monto USD"
-                      value={newOpAmount}
-                      onChange={(e) => setNewOpAmount(e.target.value)}
-                      className="w-full p-2 bg-white border border-gray-300 rounded-lg text-xs font-semibold text-gray-700"
-                    />
-                  </div>
+                // Ingresses belonging to active session
+                const sessionIngressesOps = activeSessionOps.filter((op: any) => op.type === 'ingreso' && op.concept !== 'Apertura de Caja - Fondo Inicial');
+                const sessionIngressesBs = sessionIngressesOps.reduce((acc: number, curr: any) => acc + (curr.amount_bs || (curr.amount * bcvRate)), 0);
+                const sessionIngressesUsd = sessionIngressesOps.reduce((acc: number, curr: any) => acc + curr.amount, 0);
 
-                  <div>
-                    <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1">Tipo de Movimiento</label>
-                    <select
-                      value={newOpType}
-                      onChange={(e) => setNewOpType(e.target.value as any)}
-                      className="w-full p-2 bg-white border border-gray-300 rounded-lg text-xs font-semibold text-gray-700"
-                    >
-                      <option value="ingreso">Ingreso (+)</option>
-                      <option value="egreso">Egreso (-)</option>
-                    </select>
-                  </div>
-                </div>
+                // Egresses belonging to active session
+                const sessionEgressesOps = activeSessionOps.filter((op: any) => op.type === 'egreso');
+                const sessionEgressesBs = sessionEgressesOps.reduce((acc: number, curr: any) => acc + (curr.amount_bs || (curr.amount * bcvRate)), 0);
+                const sessionEgressesUsd = sessionEgressesOps.reduce((acc: number, curr: any) => acc + curr.amount, 0);
 
-                <div className="mt-4 flex justify-end">
-                  <button
-                    onClick={() => {
-                      const amountNum = parseFloat(newOpAmount);
-                      if (!newOpConcept.trim() || isNaN(amountNum) || amountNum <= 0) {
-                        alert('Por favor ingrese un concepto válido y un monto mayor a cero.');
-                        return;
-                      }
+                // Expected Net balance
+                const esperadoSessionBs = initialFondoBs + sessionIngressesBs - sessionEgressesBs;
+                const esperadoSessionUsd = initialFondoUsd + sessionIngressesUsd - sessionEgressesUsd;
 
-                      const newOp = {
-                        id: cashOps.length + 1,
-                        type: newOpType,
-                        concept: newOpConcept.trim(),
-                        amount: amountNum,
-                        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-                      };
+                const startSession = async (aperturaBs: number, observaciones: string) => {
+                  const openingUsd = aperturaBs / bcvRate;
+                  const newSession = await dbService.createCashSession({
+                    apertura_bs: aperturaBs,
+                    apertura_usd: openingUsd,
+                    observaciones: observaciones
+                  });
+                  
+                  // Create starting cash movement
+                  await dbService.addCashOp({
+                    type: 'ingreso',
+                    concept: 'Apertura de Caja - Fondo Inicial',
+                    amount: openingUsd,
+                    amount_bs: aperturaBs
+                  });
 
-                      setCashOps([...cashOps, newOp]);
-                      setCajaSuccessMsg(`¡Movimiento registrado con éxito!`);
-                      setNewOpConcept('');
-                      setNewOpAmount('');
-                      setTimeout(() => setCajaSuccessMsg(null), 3000);
-                    }}
-                    className="px-5 py-2 bg-gray-800 hover:bg-gray-900 text-white text-xs font-black rounded-xl transition cursor-pointer shadow-xs"
-                  >
-                    Registrar Movimiento
-                  </button>
-                </div>
-              </div>
+                  await fetchCajaData();
+                  setShowOpenCajaModal(false);
+                  setOpenCajaAmountBs('10.00');
+                  setCajaObservaciones('');
+                  alert("¡Caja aperturada con éxito!");
+                };
 
-              {/* Cash Movements Table */}
-              <div className="bg-white border border-gray-200 rounded-xl shadow-xs overflow-hidden">
-                <div className="p-4 bg-gray-50 border-b border-gray-150">
-                  <h3 className="text-xs font-black uppercase text-gray-800 tracking-wider">Historial de Caja Diaria</h3>
-                </div>
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left border-collapse text-xs">
-                    <thead>
-                      <tr className="bg-[#005da9] text-white">
-                        <th className="p-3 font-bold">ID</th>
-                        <th className="p-3 font-bold">Concepto</th>
-                        <th className="p-3 font-bold">Hora</th>
-                        <th className="p-3 font-bold text-right">Ingreso ($)</th>
-                        <th className="p-3 font-bold text-right">Egreso ($)</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-100 font-medium text-gray-700">
-                      {cashOps.map((op) => (
-                        <tr key={op.id} className="hover:bg-gray-50">
-                          <td className="p-3 text-gray-400 font-mono">#{op.id}</td>
-                          <td className="p-3 font-bold text-gray-800">{op.concept}</td>
-                          <td className="p-3 text-gray-400 font-mono">{op.time}</td>
-                          <td className="p-3 text-right text-emerald-600 font-black">
-                            {op.type === 'ingreso' ? `+$${op.amount.toFixed(2)}` : ''}
-                          </td>
-                          <td className="p-3 text-right text-rose-600 font-black">
-                            {op.type === 'egreso' ? `-$${op.amount.toFixed(2)}` : ''}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
+                const closeSession = async (cierreBs: number, observaciones: string) => {
+                  if (!activeSession) return;
+                  
+                  const diferenciaBs = cierreBs - esperadoSessionBs;
+                  const cierreUsd = cierreBs / bcvRate;
+                  const diferenciaUsd = cierreUsd - esperadoSessionUsd;
+
+                  await dbService.updateCashSession(activeSession.id, {
+                    cierre: new Date().toLocaleString('es-VE'),
+                    cierre_bs: cierreBs,
+                    cierre_usd: cierreUsd,
+                    esperado_bs: esperadoSessionBs,
+                    esperado_usd: esperadoSessionUsd,
+                    diferencia_bs: diferenciaBs,
+                    diferencia_usd: diferenciaUsd,
+                    estado: 'cerrada',
+                    observaciones: observaciones
+                  });
+
+                  // Add closing movement
+                  await dbService.addCashOp({
+                    type: 'egreso',
+                    concept: `Cierre de Caja - Entrega de Efectivo (Arqueo)`,
+                    amount: cierreUsd,
+                    amount_bs: cierreBs
+                  });
+
+                  await fetchCajaData();
+                  setShowCloseCajaModal(false);
+                  setCloseCajaAmountBs('');
+                  setCajaObservaciones('');
+                  alert("¡Caja cerrada y arqueada exitosamente!");
+                };
+
+                const handleRegisterManualMovement = async () => {
+                  const amountNum = parseFloat(newOpAmount);
+                  if (!newOpConcept.trim() || isNaN(amountNum) || amountNum <= 0) {
+                    alert('Por favor ingrese un concepto válido y un monto mayor a cero.');
+                    return;
+                  }
+                  
+                  if (!activeSession) {
+                    alert('Debe aperturar la caja antes de registrar movimientos manuales.');
+                    return;
+                  }
+
+                  try {
+                    const amountBs = amountNum * bcvRate;
+                    await dbService.addCashOp({
+                      type: newOpType,
+                      concept: newOpConcept.trim(),
+                      amount: amountNum,
+                      amount_bs: amountBs
+                    });
+                    
+                    setCajaSuccessMsg(`¡Movimiento registrado con éxito!`);
+                    setNewOpConcept('');
+                    setNewOpAmount('');
+                    fetchCajaData();
+                    setTimeout(() => setCajaSuccessMsg(null), 3000);
+                  } catch (e) {
+                    console.error("Error saving manual movement:", e);
+                    alert("Error al registrar movimiento en base de datos.");
+                  }
+                };
+
+                return (
+                  <>
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-gray-150 pb-4">
+                      <div>
+                        <h2 className="text-xl font-black text-[#131921] uppercase tracking-tight flex items-center gap-2">
+                          <Store className="w-6 h-6 text-amber-600" />
+                          <span>Control de Caja y Arqueo</span>
+                        </h2>
+                        <p className="text-xs text-gray-500 font-medium mt-0.5">
+                          Monitoreo de ingresos y egresos diarios, control de fondo fijo, y verificación de balances en bolívares y dólares.
+                        </p>
+                      </div>
+
+                      {/* Header Session Action Controls */}
+                      <div className="flex items-center gap-3">
+                        {activeSession ? (
+                          <div className="flex items-center gap-3 bg-emerald-50 border border-emerald-100 px-4 py-2 rounded-xl">
+                            <div className="text-right">
+                              <p className="text-[9px] text-emerald-800 font-black uppercase tracking-wider">Caja Abierta</p>
+                              <p className="text-[11px] text-emerald-600 font-mono font-bold leading-none mt-0.5">{activeSession.apertura}</p>
+                            </div>
+                            <button
+                              onClick={() => {
+                                setCloseCajaAmountBs('');
+                                setCajaObservaciones('');
+                                setShowCloseCajaModal(true);
+                              }}
+                              className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white text-xs font-black uppercase tracking-wider rounded-lg transition cursor-pointer flex items-center gap-1.5 shadow-sm"
+                            >
+                              <Lock className="w-3.5 h-3.5" />
+                              <span>Cerrar Caja</span>
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-3 bg-rose-50 border border-rose-100 px-4 py-2 rounded-xl">
+                            <div>
+                              <p className="text-[9px] text-rose-800 font-black uppercase tracking-wider">Caja Cerrada</p>
+                              <p className="text-[10px] text-rose-500 font-semibold leading-none mt-0.5">Debe abrir caja para facturar</p>
+                            </div>
+                            <button
+                              onClick={() => {
+                                setOpenCajaAmountBs('10.00');
+                                setCajaObservaciones('');
+                                setShowOpenCajaModal(true);
+                              }}
+                              className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black uppercase tracking-wider rounded-lg transition cursor-pointer flex items-center gap-1.5 shadow-sm"
+                            >
+                              <Unlock className="w-3.5 h-3.5" />
+                              <span>Aperturar Caja</span>
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Cash balance metrics widgets */}
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                      <div className="bg-emerald-50/50 border border-emerald-100 rounded-xl p-4">
+                        <p className="text-[10px] text-gray-400 font-black uppercase tracking-wider">Fondo de Apertura</p>
+                        <p className="text-lg font-black text-emerald-800 mt-1">{formatBs(initialFondoBs)}</p>
+                        <p className="text-[10px] text-emerald-600 font-bold mt-0.5">({formatUSD(initialFondoUsd)})</p>
+                      </div>
+                      <div className="bg-blue-50/50 border border-blue-100 rounded-xl p-4">
+                        <p className="text-[10px] text-gray-400 font-black uppercase tracking-wider">Ingresos del Turno</p>
+                        <p className="text-lg font-black text-blue-800 mt-1">+{formatBs(sessionIngressesBs)}</p>
+                        <p className="text-[10px] text-blue-600 font-bold mt-0.5">(+{formatUSD(sessionIngressesUsd)})</p>
+                      </div>
+                      <div className="bg-rose-50/50 border border-rose-100 rounded-xl p-4">
+                        <p className="text-[10px] text-gray-400 font-black uppercase tracking-wider">Egresos del Turno</p>
+                        <p className="text-lg font-black text-rose-800 mt-1">-{formatBs(sessionEgressesBs)}</p>
+                        <p className="text-[10px] text-rose-600 font-bold mt-0.5">(-{formatUSD(sessionEgressesUsd)})</p>
+                      </div>
+                      <div className="bg-amber-50/50 border border-amber-100 rounded-xl p-4">
+                        <p className="text-[10px] text-gray-400 font-black uppercase tracking-wider">Saldo Esperado</p>
+                        <p className="text-lg font-black text-amber-800 mt-1">{formatBs(esperadoSessionBs)}</p>
+                        <p className="text-[10px] text-amber-600 font-bold mt-0.5">({formatUSD(esperadoSessionUsd)})</p>
+                      </div>
+                    </div>
+
+                    {/* Manual Cash Movement Form */}
+                    <div className="bg-gray-50 border border-gray-150 rounded-2xl p-5 relative overflow-hidden">
+                      {!activeSession && (
+                        <div className="absolute inset-0 bg-white/70 backdrop-blur-xs flex items-center justify-center z-10 p-6 text-center select-none">
+                          <div className="max-w-xs space-y-2">
+                            <Lock className="w-8 h-8 text-rose-500 mx-auto" />
+                            <p className="text-xs font-black uppercase text-gray-800 tracking-tight">Formulario Bloqueado</p>
+                            <p className="text-[11px] text-gray-500 font-medium leading-relaxed">Debe aperturar la caja diaria para registrar ingresos o egresos manuales de caja.</p>
+                          </div>
+                        </div>
+                      )}
+                      
+                      <h3 className="text-xs font-extrabold uppercase tracking-wider text-gray-800 mb-3">Registrar Movimiento de Caja Manual</h3>
+                      
+                      {cajaSuccessMsg && (
+                        <div className="mb-4 p-3 bg-emerald-100 border border-emerald-200 text-emerald-800 text-xs font-bold rounded-lg flex items-center gap-2">
+                          <Check className="w-4 h-4 shrink-0" />
+                          <span>{cajaSuccessMsg}</span>
+                        </div>
+                      )}
+
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                        <div>
+                          <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1">Concepto o Descripción</label>
+                          <input
+                            type="text"
+                            placeholder="Ej. Pago de Delivery / Repuestos"
+                            value={newOpConcept}
+                            onChange={(e) => setNewOpConcept(e.target.value)}
+                            disabled={!activeSession}
+                            className="w-full p-2 bg-white border border-gray-300 rounded-lg text-xs font-semibold text-gray-700 focus:ring-2 focus:ring-[#005da9] focus:outline-none disabled:bg-gray-100 disabled:text-gray-400"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1">Monto ($ USD)</label>
+                          <input
+                            type="number"
+                            step="0.01"
+                            placeholder="Monto USD"
+                            value={newOpAmount}
+                            onChange={(e) => setNewOpAmount(e.target.value)}
+                            disabled={!activeSession}
+                            className="w-full p-2 bg-white border border-gray-300 rounded-lg text-xs font-semibold text-gray-700 focus:ring-2 focus:ring-[#005da9] focus:outline-none disabled:bg-gray-100 disabled:text-gray-400"
+                          />
+                          {newOpAmount && !isNaN(parseFloat(newOpAmount)) && (
+                            <span className="text-[9px] text-gray-400 font-bold mt-1 block">
+                              Equivale a: <span className="text-gray-600">{(parseFloat(newOpAmount) * bcvRate).toFixed(2)} Bs.</span>
+                            </span>
+                          )}
+                        </div>
+
+                        <div>
+                          <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1">Tipo de Movimiento</label>
+                          <select
+                            value={newOpType}
+                            onChange={(e) => setNewOpType(e.target.value as any)}
+                            disabled={!activeSession}
+                            className="w-full p-2 bg-white border border-gray-300 rounded-lg text-xs font-semibold text-gray-700 focus:ring-2 focus:ring-[#005da9] focus:outline-none disabled:bg-gray-100 disabled:text-gray-400"
+                          >
+                            <option value="ingreso">Ingreso (+)</option>
+                            <option value="egreso">Egreso (-)</option>
+                          </select>
+                        </div>
+                      </div>
+
+                      <div className="mt-4 flex justify-end">
+                        <button
+                          onClick={handleRegisterManualMovement}
+                          disabled={!activeSession}
+                          className="px-5 py-2 bg-gray-800 hover:bg-gray-900 text-white text-xs font-black uppercase tracking-wider rounded-xl transition cursor-pointer shadow-sm disabled:bg-gray-200 disabled:text-gray-400 disabled:cursor-not-allowed"
+                        >
+                          Registrar Movimiento
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Cash Movements Table for current open session */}
+                    <div className="bg-white border border-gray-200 rounded-xl shadow-xs overflow-hidden">
+                      <div className="p-4 bg-gray-50 border-b border-gray-150">
+                        <h3 className="text-xs font-black uppercase text-gray-800 tracking-wider">Detalle de Operaciones de la Sesión Activa</h3>
+                      </div>
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-left border-collapse text-xs">
+                          <thead>
+                            <tr className="bg-[#005da9] text-white">
+                              <th className="p-3 font-bold">ID</th>
+                              <th className="p-3 font-bold">Concepto</th>
+                              <th className="p-3 font-bold">Hora</th>
+                              <th className="p-3 font-bold text-right">Ingreso (Bs. / $)</th>
+                              <th className="p-3 font-bold text-right">Egreso (Bs. / $)</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-gray-100 font-medium text-gray-700">
+                            {activeSessionOps.length === 0 ? (
+                              <tr>
+                                <td colSpan={5} className="p-8 text-center text-gray-400 font-semibold italic">
+                                  No hay movimientos registrados en la sesión actual. Las ventas o ingresos manuales aparecerán aquí.
+                                </td>
+                              </tr>
+                            ) : (
+                              activeSessionOps.map((op: any) => (
+                                <tr key={op.id} className="hover:bg-gray-50">
+                                  <td className="p-3 text-gray-400 font-mono">#{op.id}</td>
+                                  <td className="p-3 font-bold text-gray-800">{op.concept}</td>
+                                  <td className="p-3 text-gray-400 font-mono">{op.time}</td>
+                                  <td className="p-3 text-right text-emerald-600 font-black">
+                                    {op.type === 'ingreso' ? (
+                                      <div className="flex flex-col items-end">
+                                        <span>+{formatBs(op.amount_bs || (op.amount * bcvRate))}</span>
+                                        <span className="text-[10px] text-emerald-500 font-semibold">({formatUSD(op.amount)})</span>
+                                      </div>
+                                    ) : ''}
+                                  </td>
+                                  <td className="p-3 text-right text-rose-600 font-black">
+                                    {op.type === 'egreso' ? (
+                                      <div className="flex flex-col items-end">
+                                        <span>-{formatBs(op.amount_bs || (op.amount * bcvRate))}</span>
+                                        <span className="text-[10px] text-rose-500 font-semibold">({formatUSD(op.amount)})</span>
+                                      </div>
+                                    ) : ''}
+                                  </td>
+                                </tr>
+                              ))
+                            )}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+
+                    {/* REPORT: RECENT SESSIONS HISTORY (As requested in 2. - Imagen 1) */}
+                    <div className="bg-white border border-gray-200 rounded-xl shadow-xs overflow-hidden mt-6">
+                      <div className="p-4 bg-gray-50 border-b border-gray-150 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                        <div>
+                          <h3 className="text-xs font-black uppercase text-gray-800 tracking-wider">Historial Reciente de Sesiones y Arqueo (Reporte)</h3>
+                          <p className="text-[10px] text-gray-400 font-medium">Consulte el registro histórico de cierres de caja, balances esperados y diferencias detectadas.</p>
+                        </div>
+                      </div>
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-left border-collapse text-xs">
+                          <thead>
+                            <tr className="bg-gray-800 text-white">
+                              <th className="p-3 font-bold">Apertura</th>
+                              <th className="p-3 font-bold">Cierre</th>
+                              <th className="p-3 font-bold text-right">Apertura Bs.</th>
+                              <th className="p-3 font-bold text-right">Cierre Bs.</th>
+                              <th className="p-3 font-bold text-right">Diferencia</th>
+                              <th className="p-3 font-bold text-center">Estado</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-gray-100 font-medium text-gray-700">
+                            {cashSessions.length === 0 ? (
+                              <tr>
+                                <td colSpan={6} className="p-8 text-center text-gray-400 font-semibold italic">
+                                  No hay historial de cierres de caja registrado.
+                                </td>
+                              </tr>
+                            ) : (
+                              cashSessions.map((session: any) => (
+                                <tr key={session.id} className="hover:bg-gray-50">
+                                  <td className="p-3 font-bold text-gray-800">{session.apertura}</td>
+                                  <td className="p-3 text-gray-500 font-semibold">{session.cierre || '—'}</td>
+                                  <td className="p-3 text-right text-gray-700 font-mono font-bold">
+                                    {formatBs(session.apertura_bs)}
+                                  </td>
+                                  <td className="p-3 text-right text-gray-700 font-mono font-bold">
+                                    {formatBs(session.cierre_bs)}
+                                  </td>
+                                  <td className="p-3 text-right font-mono font-black">
+                                    {session.diferencia_bs !== null && session.diferencia_bs !== undefined ? (
+                                      <span className={session.diferencia_bs === 0 ? 'text-gray-500' : session.diferencia_bs > 0 ? 'text-emerald-600' : 'text-rose-600'}>
+                                        {session.diferencia_bs > 0 ? '+' : ''}{formatBs(session.diferencia_bs)}
+                                      </span>
+                                    ) : (
+                                      <span className="text-gray-400">—</span>
+                                    )}
+                                  </td>
+                                  <td className="p-3 text-center">
+                                    {session.estado === 'abierta' ? (
+                                      <span className="inline-flex items-center gap-1 px-2.5 py-1 text-[10px] font-black uppercase tracking-wider rounded-full bg-blue-50 text-blue-800 border border-blue-100">
+                                        <span className="w-1.5 h-1.5 rounded-full bg-blue-600 animate-pulse"></span>
+                                        <span>Abierta</span>
+                                      </span>
+                                    ) : (
+                                      <span className="inline-flex items-center gap-1 px-2.5 py-1 text-[10px] font-black uppercase tracking-wider rounded-full bg-gray-50 text-gray-600 border border-gray-150">
+                                        <span className="w-1.5 h-1.5 rounded-full bg-gray-400"></span>
+                                        <span>Cerrada</span>
+                                      </span>
+                                    )}
+                                  </td>
+                                </tr>
+                              ))
+                            )}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+
+                    {/* MODAL: APERTURAR CAJA */}
+                    {showOpenCajaModal && (
+                      <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-xs select-none">
+                        <div className="bg-white rounded-2xl border border-gray-150 max-w-md w-full shadow-2xl p-6 text-left">
+                          <div className="flex justify-between items-center border-b border-gray-100 pb-3 mb-4">
+                            <h3 className="text-sm font-black uppercase text-gray-800 flex items-center gap-2">
+                              <Unlock className="w-5 h-5 text-emerald-600" />
+                              <span>Aperturar Caja Diaria</span>
+                            </h3>
+                            <button onClick={() => setShowOpenCajaModal(false)} className="text-gray-400 hover:text-gray-600">
+                              <X className="w-4 h-4" />
+                            </button>
+                          </div>
+                          
+                          <div className="space-y-4">
+                            <div>
+                              <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1">Monto de Apertura (Bs. - Fondo Inicial)</label>
+                              <input
+                                type="number"
+                                step="0.01"
+                                value={openCajaAmountBs}
+                                onChange={(e) => setOpenCajaAmountBs(e.target.value)}
+                                className="w-full p-2 bg-gray-50 border border-gray-200 rounded-lg text-xs font-semibold text-gray-700 font-mono"
+                              />
+                              <p className="text-[10px] text-gray-400 mt-1">
+                                Equivale aproximadamente a: <span className="font-bold text-gray-700">{formatUSD(parseFloat(openCajaAmountBs) / bcvRate)}</span> (Tasa BCV: {bcvRate.toFixed(2)})
+                              </p>
+                            </div>
+
+                            <div>
+                              <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1">Observaciones / Comentarios</label>
+                              <textarea
+                                rows={2}
+                                placeholder="Ej. Fondo inicial para dar cambio."
+                                value={cajaObservaciones}
+                                onChange={(e) => setCajaObservaciones(e.target.value)}
+                                className="w-full p-2 bg-gray-50 border border-gray-200 rounded-lg text-xs font-semibold text-gray-700"
+                              />
+                            </div>
+                          </div>
+
+                          <div className="mt-5 flex justify-end gap-2 border-t border-gray-100 pt-3">
+                            <button
+                              onClick={() => setShowOpenCajaModal(false)}
+                              className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-600 text-xs font-bold rounded-lg transition"
+                            >
+                              Cancelar
+                            </button>
+                            <button
+                              onClick={() => {
+                                const bs = parseFloat(openCajaAmountBs);
+                                if (isNaN(bs) || bs < 0) {
+                                  alert("Por favor, ingrese un monto de apertura válido.");
+                                  return;
+                                }
+                                startSession(bs, cajaObservaciones.trim());
+                              }}
+                              className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black rounded-lg transition"
+                            >
+                              Confirmar Apertura
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* MODAL: CERRAR CAJA / ARQUEO */}
+                    {showCloseCajaModal && (
+                      <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-xs select-none">
+                        <div className="bg-white rounded-2xl border border-gray-150 max-w-md w-full shadow-2xl p-6 text-left">
+                          <div className="flex justify-between items-center border-b border-gray-100 pb-3 mb-4">
+                            <h3 className="text-sm font-black uppercase text-gray-800 flex items-center gap-2">
+                              <Lock className="w-5 h-5 text-rose-600" />
+                              <span>Cerrar Caja y Arqueo</span>
+                            </h3>
+                            <button onClick={() => setShowCloseCajaModal(false)} className="text-gray-400 hover:text-gray-600">
+                              <X className="w-4 h-4" />
+                            </button>
+                          </div>
+                          
+                          <div className="space-y-4">
+                            <div className="p-3 bg-gray-50 border border-gray-150 rounded-xl space-y-1 text-xs font-mono">
+                              <div className="flex justify-between text-gray-500 font-bold">
+                                <span>Fondo Inicial:</span>
+                                <span className="text-gray-800 font-black">{formatBs(initialFondoBs)}</span>
+                              </div>
+                              <div className="flex justify-between text-gray-500 font-bold">
+                                <span>(+) Ingresos del Turno:</span>
+                                <span className="text-emerald-600 font-black">+{formatBs(sessionIngressesBs)}</span>
+                              </div>
+                              <div className="flex justify-between text-gray-500 font-bold">
+                                <span>(-) Egresos del Turno:</span>
+                                <span className="text-rose-600 font-black">-{formatBs(sessionEgressesBs)}</span>
+                              </div>
+                              <hr className="border-gray-200 my-1 font-sans" />
+                              <div className="flex justify-between text-gray-700 font-black text-sm">
+                                <span>Saldo Esperado en Caja:</span>
+                                <span className="text-blue-800">{formatBs(esperadoSessionBs)}</span>
+                              </div>
+                            </div>
+
+                            <div>
+                              <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1">Monto Real Contado en Caja (Bs.)</label>
+                              <input
+                                type="number"
+                                step="0.01"
+                                placeholder="Monto contado físicamente"
+                                value={closeCajaAmountBs}
+                                onChange={(e) => setCloseCajaAmountBs(e.target.value)}
+                                className="w-full p-2 bg-gray-50 border border-gray-200 rounded-lg text-xs font-semibold text-gray-700 font-mono"
+                              />
+                              {closeCajaAmountBs && !isNaN(parseFloat(closeCajaAmountBs)) && (
+                                <div className="mt-2 p-2 rounded-lg text-[11px] font-bold">
+                                  {(() => {
+                                    const contado = parseFloat(closeCajaAmountBs);
+                                    const dif = contado - esperadoSessionBs;
+                                    if (dif === 0) {
+                                      return (
+                                        <div className="text-emerald-700 bg-emerald-50 border border-emerald-100 p-1.5 rounded flex items-center gap-1">
+                                          <Check className="w-3.5 h-3.5" />
+                                          <span>La caja cuadra perfectamente (Diferencia: 0,00 Bs.)</span>
+                                        </div>
+                                      );
+                                    } else if (dif > 0) {
+                                      return (
+                                        <div className="text-blue-700 bg-blue-50 border border-blue-100 p-1.5 rounded flex items-center gap-1">
+                                          <Check className="w-3.5 h-3.5" />
+                                          <span>Sobrante en Caja: +{formatBs(dif)}</span>
+                                        </div>
+                                      );
+                                    } else {
+                                      return (
+                                        <div className="text-rose-700 bg-rose-50 border border-rose-100 p-1.5 rounded flex items-center gap-1">
+                                          <AlertTriangle className="w-3.5 h-3.5" />
+                                          <span>Faltante en Caja: {formatBs(dif)}</span>
+                                        </div>
+                                      );
+                                    }
+                                  })()}
+                                </div>
+                              )}
+                            </div>
+
+                            <div>
+                              <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1">Observaciones de Cierre</label>
+                              <textarea
+                                rows={2}
+                                placeholder="Ej. Todo en orden. Caja cuadrada."
+                                value={cajaObservaciones}
+                                onChange={(e) => setCajaObservaciones(e.target.value)}
+                                className="w-full p-2 bg-gray-50 border border-gray-200 rounded-lg text-xs font-semibold text-gray-700"
+                              />
+                            </div>
+                          </div>
+
+                          <div className="mt-5 flex justify-end gap-2 border-t border-gray-100 pt-3">
+                            <button
+                              onClick={() => setShowCloseCajaModal(false)}
+                              className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-600 text-xs font-bold rounded-lg transition"
+                            >
+                              Cancelar
+                            </button>
+                            <button
+                              onClick={() => {
+                                const bs = parseFloat(closeCajaAmountBs);
+                                if (isNaN(bs) || bs < 0) {
+                                  alert("Por favor, ingrese el monto real contado en caja.");
+                                  return;
+                                }
+                                closeSession(bs, cajaObservaciones.trim());
+                              }}
+                              className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white text-xs font-black rounded-lg transition"
+                            >
+                              Confirmar Cierre de Caja
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </>
+                );
+              })()}
             </div>
           )}
 
@@ -2086,16 +2713,242 @@ export default function AdminPanel({
 
           {/* VIEW: PROVEEDORES */}
           {currentMenu === 'proveedores' && (
-            <div className="space-y-6 text-left">
-              <div>
-                <h2 className="text-xl font-black text-[#131921] uppercase tracking-tight flex items-center gap-2">
-                  <Truck className="w-6 h-6 text-orange-600" />
-                  <span>Gestión de Proveedores</span>
-                </h2>
-                <p className="text-xs text-gray-500 font-medium mt-1">
-                  Módulo en desarrollo para control de proveedores y pagos.
-                </p>
+            <div className="space-y-6 text-left" id="module-proveedores">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div>
+                  <h2 className="text-xl font-black text-[#131921] uppercase tracking-tight flex items-center gap-2">
+                    <Truck className="w-6 h-6 text-[#005da9]" />
+                    <span>Proveedores</span>
+                  </h2>
+                  <p className="text-xs text-gray-500 font-medium">
+                    Gestión de proveedores con datos fiscales venezolanos
+                  </p>
+                </div>
+                <button
+                  onClick={openAddProviderModal}
+                  className="px-4 py-2.5 bg-[#005da9] hover:bg-[#004b88] text-white font-black text-xs uppercase tracking-wider rounded-xl transition shadow-xs flex items-center gap-2"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>Nuevo proveedor</span>
+                </button>
               </div>
+
+              {/* Search & Filter bar */}
+              <div className="bg-white border border-gray-200 rounded-xl shadow-xs p-4 flex flex-col md:flex-row gap-4 items-center justify-between">
+                <div className="relative w-full md:w-96">
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-400">
+                    <Search className="w-4 h-4" />
+                  </div>
+                  <input
+                    type="text"
+                    placeholder="Buscar por razón social, RIF o código..."
+                    className="w-full pl-9 pr-4 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs font-bold text-gray-800 focus:outline-none focus:ring-2 focus:ring-[#005da9] focus:bg-white transition"
+                    value={providerSearch}
+                    onChange={(e) => setProviderSearch(e.target.value)}
+                  />
+                  {providerSearch && (
+                    <button 
+                      onClick={() => setProviderSearch('')} 
+                      className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
+
+                <div className="text-[10px] text-gray-400 font-bold uppercase shrink-0">
+                  Total proveedores: <span className="text-gray-800 font-black">{providers.length}</span>
+                </div>
+              </div>
+
+              {/* Table of Proveedores */}
+              <div className="bg-white border border-gray-200 rounded-xl shadow-xs overflow-hidden">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left border-collapse text-xs">
+                    <thead>
+                      <tr className="bg-gray-50 text-gray-500 font-bold uppercase text-[10px] border-b border-gray-200">
+                        <th className="p-4">Código</th>
+                        <th className="p-4">RIF</th>
+                        <th className="p-4">Razón social</th>
+                        <th className="p-4">Tipo</th>
+                        <th className="p-4">Teléfono</th>
+                        <th className="p-4">Banco</th>
+                        <th className="p-4 text-center">Acciones</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100 text-gray-700 font-semibold">
+                      {loadingProviders ? (
+                        <tr>
+                          <td colSpan={7} className="p-12 text-center text-gray-400 font-semibold">
+                            <RefreshCw className="w-5 h-5 animate-spin mx-auto mb-2 text-gray-400" />
+                            Cargando proveedores...
+                          </td>
+                        </tr>
+                      ) : filteredProviders.length === 0 ? (
+                        <tr>
+                          <td colSpan={7} className="p-16 text-center text-gray-400 font-medium text-sm">
+                            Sin proveedores registrados
+                          </td>
+                        </tr>
+                      ) : (
+                        filteredProviders.map((prov) => (
+                          <tr key={prov.id} className="hover:bg-gray-50/50">
+                            <td className="p-4">
+                              <span className="bg-orange-50 text-orange-700 text-[10px] font-black uppercase px-2 py-1 rounded-lg border border-orange-100 font-mono">
+                                {prov.code}
+                              </span>
+                            </td>
+                            <td className="p-4 font-mono font-bold text-gray-600">{prov.rif}</td>
+                            <td className="p-4 font-extrabold text-gray-900">{prov.name}</td>
+                            <td className="p-4">
+                              <span className={`px-2 py-0.5 rounded text-[9px] font-black uppercase ${
+                                prov.type === 'Jurídico' 
+                                  ? 'bg-purple-50 text-purple-700 border border-purple-100' 
+                                  : 'bg-emerald-50 text-emerald-700 border border-emerald-100'
+                              }`}>
+                                {prov.type || 'Jurídico'}
+                              </span>
+                            </td>
+                            <td className="p-4 font-mono text-gray-500">{prov.phone || 'Sin teléfono'}</td>
+                            <td className="p-4 text-gray-600">{prov.bank_name || 'No especificado'}</td>
+                            <td className="p-4">
+                              <div className="flex items-center justify-center gap-2">
+                                <button
+                                  onClick={() => openEditProviderModal(prov)}
+                                  className="p-1.5 bg-blue-50 text-blue-700 hover:bg-blue-100 rounded-lg transition"
+                                  title="Editar Proveedor"
+                                >
+                                  <Edit3 className="w-3.5 h-3.5" />
+                                </button>
+                                <button
+                                  onClick={() => handleDeleteProvider(prov.id, prov.name)}
+                                  className="p-1.5 bg-red-50 text-red-700 hover:bg-red-100 rounded-lg transition"
+                                  title="Eliminar Proveedor"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {/* -------------------- MODAL: NUEVO / EDITAR PROVEEDOR -------------------- */}
+              {showProviderModal && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4">
+                  <div className="bg-white rounded-3xl border border-gray-150 w-full max-w-md shadow-2xl overflow-hidden text-left flex flex-col">
+                    <div className="p-4 bg-gray-50 border-b border-gray-100 flex justify-between items-center">
+                      <span className="text-xs font-black text-gray-800 uppercase tracking-wider flex items-center gap-2">
+                        <Truck className="w-4 h-4 text-gray-500" />
+                        <span>{selectedProviderForEdit ? 'Editar Proveedor' : 'Nuevo Proveedor'}</span>
+                      </span>
+                      <button 
+                        onClick={() => setShowProviderModal(false)}
+                        className="p-1.5 hover:bg-gray-200 text-gray-400 hover:text-gray-600 rounded-lg transition"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+
+                    <form onSubmit={handleSaveProvider} className="p-5 space-y-4">
+                      <div className="grid grid-cols-3 gap-4">
+                        <div className="col-span-1">
+                          <label className="block text-[10px] font-black uppercase text-gray-400 mb-1">Código *</label>
+                          <input
+                            type="text"
+                            required
+                            value={providerFormCode}
+                            onChange={(e) => setProviderFormCode(e.target.value)}
+                            placeholder="PROV-001"
+                            className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs font-bold text-gray-800 focus:outline-none focus:ring-2 focus:ring-[#005da9]"
+                          />
+                        </div>
+                        <div className="col-span-2">
+                          <label className="block text-[10px] font-black uppercase text-gray-400 mb-1">Razón Social *</label>
+                          <input
+                            type="text"
+                            required
+                            value={providerFormName}
+                            onChange={(e) => setProviderFormName(e.target.value)}
+                            placeholder="Ej: Distribuidora Bella Vista C.A."
+                            className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs font-bold text-gray-800 focus:outline-none focus:ring-2 focus:ring-[#005da9]"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-[10px] font-black uppercase text-gray-400 mb-1">Tipo de Firma *</label>
+                          <select
+                            value={providerFormType}
+                            onChange={(e) => setProviderFormType(e.target.value)}
+                            className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs font-bold text-gray-800 focus:outline-none focus:ring-2 focus:ring-[#005da9]"
+                          >
+                            <option value="Jurídico">Jurídico (J / G)</option>
+                            <option value="Natural">Natural (V / E)</option>
+                          </select>
+                        </div>
+
+                        <div>
+                          <label className="block text-[10px] font-black uppercase text-gray-400 mb-1">RIF / Cédula *</label>
+                          <input
+                            type="text"
+                            required
+                            value={providerFormRif}
+                            onChange={(e) => setProviderFormRif(e.target.value)}
+                            placeholder="Ej: J-12345678-9"
+                            className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs font-bold text-gray-800 focus:outline-none focus:ring-2 focus:ring-[#005da9]"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-[10px] font-black uppercase text-gray-400 mb-1">Teléfono</label>
+                          <input
+                            type="text"
+                            value={providerFormPhone}
+                            onChange={(e) => setProviderFormPhone(e.target.value)}
+                            placeholder="Ej: 0261-7000123"
+                            className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs font-bold text-gray-800 focus:outline-none focus:ring-2 focus:ring-[#005da9]"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-[10px] font-black uppercase text-gray-400 mb-1">Banco Receptor</label>
+                          <input
+                            type="text"
+                            value={providerFormBankName}
+                            onChange={(e) => setProviderFormBankName(e.target.value)}
+                            placeholder="Ej: Banesco, Banco de Venezuela"
+                            className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs font-bold text-gray-800 focus:outline-none focus:ring-2 focus:ring-[#005da9]"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="flex gap-2 pt-3 border-t border-gray-100">
+                        <button
+                          type="button"
+                          onClick={() => setShowProviderModal(false)}
+                          className="flex-1 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold text-xs uppercase tracking-wider rounded-xl transition"
+                        >
+                          Cancelar
+                        </button>
+                        <button
+                          type="submit"
+                          className="flex-1 py-2 bg-[#005da9] hover:bg-[#004b88] text-white font-black text-xs uppercase tracking-wider rounded-xl transition shadow-xs"
+                        >
+                          Guardar
+                        </button>
+                      </div>
+                    </form>
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
@@ -2216,9 +3069,169 @@ export default function AdminPanel({
                         />
                       </div>
                     </div>
+                    {/* Habilitar / Deshabilitar Métodos */}
+                    <div className="pt-6 border-t border-gray-100">
+                      <h4 className="text-xs font-black text-gray-800 uppercase tracking-wider mb-4 flex items-center gap-2">
+                        <ToggleRight className="w-4 h-4 text-[#005da9]" />
+                        <span>Habilitar / Deshabilitar Métodos de Entrega y Pago</span>
+                      </h4>
+                      
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        {/* Métodos de Entrega */}
+                        <div className="space-y-4 bg-gray-50/50 p-4 rounded-xl border border-gray-150">
+                          <span className="text-[10px] font-black text-gray-400 uppercase tracking-wider block">Métodos de Entrega</span>
+                          
+                          <div className="flex items-center justify-between p-2 bg-white rounded-lg border border-gray-100">
+                            <div>
+                              <span className="text-xs font-bold text-gray-800 block">Envío a Domicilio</span>
+                              <span className="text-[10px] text-gray-400 font-medium">Habilitar despacho motorizado para clientes</span>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => setDisableDeliveryB2C(!disableDeliveryB2C)}
+                              className="focus:outline-none cursor-pointer"
+                            >
+                              {disableDeliveryB2C ? (
+                                <ToggleLeft className="w-10 h-10 text-gray-300 transition" />
+                              ) : (
+                                <ToggleRight className="w-10 h-10 text-[#005da9] transition" />
+                              )}
+                            </button>
+                          </div>
+
+                          <div className="flex items-center justify-between p-2 bg-white rounded-lg border border-gray-100">
+                            <div>
+                              <span className="text-xs font-bold text-gray-800 block">Retiro en Tienda</span>
+                              <span className="text-[10px] text-gray-400 font-medium">Habilitar que el cliente busque en sucursal</span>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => setDisableDeliveryRetiro(!disableDeliveryRetiro)}
+                              className="focus:outline-none cursor-pointer"
+                            >
+                              {disableDeliveryRetiro ? (
+                                <ToggleLeft className="w-10 h-10 text-gray-300 transition" />
+                              ) : (
+                                <ToggleRight className="w-10 h-10 text-[#005da9] transition" />
+                              )}
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Métodos de Pago */}
+                        <div className="space-y-4 bg-gray-50/50 p-4 rounded-xl border border-gray-150">
+                          <span className="text-[10px] font-black text-gray-400 uppercase tracking-wider block">Métodos de Pago</span>
+                          
+                          <div className="flex items-center justify-between p-2 bg-white rounded-lg border border-gray-100">
+                            <div>
+                              <span className="text-xs font-bold text-gray-800 block">Pago Móvil</span>
+                              <span className="text-[10px] text-gray-400 font-medium">Pago móvil interbancario venezolano</span>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => setDisablePayPagomovil(!disablePayPagomovil)}
+                              className="focus:outline-none cursor-pointer"
+                            >
+                              {disablePayPagomovil ? (
+                                <ToggleLeft className="w-10 h-10 text-gray-300 transition" />
+                              ) : (
+                                <ToggleRight className="w-10 h-10 text-[#005da9] transition" />
+                              )}
+                            </button>
+                          </div>
+
+                          <div className="flex items-center justify-between p-2 bg-white rounded-lg border border-gray-100">
+                            <div>
+                              <span className="text-xs font-bold text-gray-800 block">Efectivo (Divisas / Bs)</span>
+                              <span className="text-[10px] text-gray-400 font-medium">Pago físico en dólares o bolívares</span>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => setDisablePayEfectivo(!disablePayEfectivo)}
+                              className="focus:outline-none cursor-pointer"
+                            >
+                              {disablePayEfectivo ? (
+                                <ToggleLeft className="w-10 h-10 text-gray-300 transition" />
+                              ) : (
+                                <ToggleRight className="w-10 h-10 text-[#005da9] transition" />
+                              )}
+                            </button>
+                          </div>
+
+                          <div className="flex items-center justify-between p-2 bg-white rounded-lg border border-gray-100">
+                            <div>
+                              <span className="text-xs font-bold text-gray-800 block">Transferencia Bancaria</span>
+                              <span className="text-[10px] text-gray-400 font-medium">Transferencias directas diferidas</span>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => setDisablePayTransferencia(!disablePayTransferencia)}
+                              className="focus:outline-none cursor-pointer"
+                            >
+                              {disablePayTransferencia ? (
+                                <ToggleLeft className="w-10 h-10 text-gray-300 transition" />
+                              ) : (
+                                <ToggleRight className="w-10 h-10 text-[#005da9] transition" />
+                              )}
+                            </button>
+                          </div>
+
+                          <div className="flex items-center justify-between p-2 bg-white rounded-lg border border-gray-100">
+                            <div>
+                              <span className="text-xs font-bold text-gray-800 block">Punto de Venta</span>
+                              <span className="text-[10px] text-gray-400 font-medium">Tarjetas de débito o crédito en local</span>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => setDisablePayPunto(!disablePayPunto)}
+                              className="focus:outline-none cursor-pointer"
+                            >
+                              {disablePayPunto ? (
+                                <ToggleLeft className="w-10 h-10 text-gray-300 transition" />
+                              ) : (
+                                <ToggleRight className="w-10 h-10 text-[#005da9] transition" />
+                              )}
+                            </button>
+                          </div>
+
+                          <div className="flex items-center justify-between p-2 bg-white rounded-lg border border-gray-100">
+                            <div>
+                              <span className="text-xs font-bold text-gray-800 block">Otras Divisas (Euros, Pesos)</span>
+                              <span className="text-[10px] text-gray-400 font-medium">Soporte para EUR o COP en efectivo</span>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => setDisablePayOtras(!disablePayOtras)}
+                              className="focus:outline-none cursor-pointer"
+                            >
+                              {disablePayOtras ? (
+                                <ToggleLeft className="w-10 h-10 text-gray-300 transition" />
+                              ) : (
+                                <ToggleRight className="w-10 h-10 text-[#005da9] transition" />
+                              )}
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
                     <div className="pt-4 border-t border-gray-100 flex justify-end">
                       <button
                         onClick={() => {
+                          const disabledObj = {
+                            delivery_b2c: disableDeliveryB2C,
+                            delivery_retiro: disableDeliveryRetiro,
+                            pay_pagomovil: disablePayPagomovil,
+                            pay_efectivo: disablePayEfectivo,
+                            pay_transferencia: disablePayTransferencia,
+                            pay_punto: disablePayPunto,
+                            pay_otras: disablePayOtras
+                          };
+                          localStorage.setItem('copias_bellavista_disabled_settings', JSON.stringify(disabledObj));
+                          
+                          // Dispatch a storage event so other components (CartDrawer, POSModule) react instantly!
+                          window.dispatchEvent(new Event('storage'));
+                          
                           setConfigSaved(true);
                           setTimeout(() => setConfigSaved(false), 4000);
                         }}

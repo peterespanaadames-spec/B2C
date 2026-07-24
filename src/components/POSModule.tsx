@@ -83,6 +83,81 @@ export default function POSModule({
   const [selectedClient, setSelectedClient] = useState('Consumidor final');
   const [paymentMethod, setPaymentMethod] = useState('Efectivo');
 
+  // Global disabled methods settings
+  const [disabledSettings, setDisabledSettings] = useState({
+    delivery_b2c: false,
+    delivery_retiro: false,
+    pay_pagomovil: false,
+    pay_efectivo: false,
+    pay_transferencia: false,
+    pay_punto: false,
+    pay_otras: false
+  });
+
+  useEffect(() => {
+    const loadSettings = () => {
+      try {
+        const saved = localStorage.getItem('copias_bellavista_disabled_settings');
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          setDisabledSettings({
+            delivery_b2c: parsed.delivery_b2c === true,
+            delivery_retiro: parsed.delivery_retiro === true,
+            pay_pagomovil: parsed.pay_pagomovil === true,
+            pay_efectivo: parsed.pay_efectivo === true,
+            pay_transferencia: parsed.pay_transferencia === true,
+            pay_punto: parsed.pay_punto === true,
+            pay_otras: parsed.pay_otras === true
+          });
+        }
+      } catch (e) {
+        console.error(e);
+      }
+    };
+
+    loadSettings();
+    window.addEventListener('storage', loadSettings);
+    return () => {
+      window.removeEventListener('storage', loadSettings);
+    };
+  }, []);
+
+  useEffect(() => {
+    const isPayDisabled = (pm: string) => {
+      if (pm === 'Efectivo USD' && disabledSettings.pay_efectivo) return true;
+      if (pm === 'Efectivo VES' && disabledSettings.pay_efectivo) return true;
+      if (pm === 'Pago Móvil' && disabledSettings.pay_pagomovil) return true;
+      if (pm === 'Punto de Venta' && disabledSettings.pay_punto) return true;
+      if (pm === 'Euro' && disabledSettings.pay_otras) return true;
+      if (pm === 'Pesos Colombianos' && disabledSettings.pay_otras) return true;
+      return false;
+    };
+
+    if (isPayDisabled(paymentMethod)) {
+      if (!disabledSettings.pay_efectivo) {
+        setPaymentMethod('Efectivo USD');
+      } else if (!disabledSettings.pay_pagomovil) {
+        setPaymentMethod('Pago Móvil');
+      } else if (!disabledSettings.pay_punto) {
+        setPaymentMethod('Punto de Venta');
+      } else if (!disabledSettings.pay_transferencia) {
+        setPaymentMethod('Transferencia Bancaria');
+      }
+    }
+  }, [disabledSettings, paymentMethod]);
+  
+  // Cash Register session state
+  const [activeSession, setActiveSession] = useState<any | null>(null);
+
+  const checkActiveSession = async () => {
+    try {
+      const active = await dbService.getActiveCashSession();
+      setActiveSession(active);
+    } catch (e) {
+      console.error("Error loading cash session in POSModule:", e);
+    }
+  };
+
   // Clients database for autocomplete
   const [clients, setClients] = useState<any[]>([]);
   const [showClientSuggestions, setShowClientSuggestions] = useState(false);
@@ -204,6 +279,7 @@ export default function POSModule({
 
   useEffect(() => {
     loadInvoiceData();
+    checkActiveSession();
   }, [products]);
 
   // Display ephemeral toast notification
@@ -576,6 +652,13 @@ export default function POSModule({
       return;
     }
 
+    // Verify cash register is open before finalizing any sale
+    const session = await dbService.getActiveCashSession();
+    if (!session) {
+      showToast('error', '⚠️ CAJA CERRADA: Debe aperturar la caja en la sección "Caja y Arqueo" antes de realizar ventas.');
+      return;
+    }
+
     // Double check stock quantities before finalizing
     const stockErrors = cart.filter(item => item.qty > item.product.stock);
     if (stockErrors.length > 0) {
@@ -613,6 +696,19 @@ export default function POSModule({
         items: invoiceItems
       });
 
+      // 3.2 Register income in Cash register (Caja)
+      try {
+        const amountBs = total * bcvRate;
+        await dbService.addCashOp({
+          type: 'ingreso',
+          concept: `Venta POS - Factura ${created.control_number || 'FAC'} (${selectedClient})`,
+          amount: total,
+          amount_bs: amountBs
+        });
+      } catch (cajaErr) {
+        console.error("Failed to register POS sale in cash register:", cajaErr);
+      }
+
       // 3.5 Delete the draft from the wait list since it is now emitted/finalized
       if (activeDraftId) {
         try {
@@ -636,6 +732,7 @@ export default function POSModule({
       
       // 6. Reload history lists
       await loadInvoiceData();
+      await checkActiveSession();
       showToast('success', '¡Factura generada e inventario rebajado exitosamente!');
     } catch (err: any) {
       console.error('Error finalizing invoice:', err);
@@ -1205,14 +1302,17 @@ export default function POSModule({
               <select 
                 value={paymentMethod} 
                 onChange={(e) => setPaymentMethod(e.target.value)} 
-                className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs font-bold text-gray-800 focus:outline-none focus:ring-2 focus:ring-[#005da9] focus:bg-white transition"
+                className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs font-bold text-gray-800 focus:outline-none focus:ring-2 focus:ring-[#005da9] focus:bg-white transition cursor-pointer"
               >
-                <option value="Efectivo USD">💵 Efectivo Dólares (USD)</option>
-                <option value="Efectivo VES">💵 Efectivo Bolívares (VES)</option>
-                <option value="Pago Móvil">📱 Pago Móvil</option>
-                <option value="Punto de Venta">💳 Punto de Venta (Tarjeta)</option>
-                <option value="Euro">💶 Euro (EUR)</option>
-                <option value="Pesos Colombianos">🇨🇴 Peso Colombiano (COP)</option>
+                {!disabledSettings.pay_efectivo && <option value="Efectivo USD">💵 Efectivo Dólares (USD)</option>}
+                {!disabledSettings.pay_efectivo && <option value="Efectivo VES">💵 Efectivo Bolívares (VES)</option>}
+                {!disabledSettings.pay_pagomovil && <option value="Pago Móvil">📱 Pago Móvil</option>}
+                {!disabledSettings.pay_punto && <option value="Punto de Venta">💳 Punto de Venta (Tarjeta)</option>}
+                {!disabledSettings.pay_otras && <option value="Euro">💶 Euro (EUR)</option>}
+                {!disabledSettings.pay_otras && <option value="Pesos Colombianos">🇨🇴 Peso Colombiano (COP)</option>}
+                {disabledSettings.pay_efectivo && disabledSettings.pay_pagomovil && disabledSettings.pay_punto && disabledSettings.pay_otras && (
+                  <option value="">⚠️ No hay métodos de pago habilitados</option>
+                )}
               </select>
             </div>
 

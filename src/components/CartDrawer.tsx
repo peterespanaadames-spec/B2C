@@ -108,6 +108,72 @@ export default function CartDrawer({
   const [locationStatus, setLocationStatus] = useState<'idle' | 'success' | 'error'>('idle');
   const [suggestionTimeout, setSuggestionTimeout] = useState<any>(null);
 
+  // Global disabled methods settings
+  const [disabledSettings, setDisabledSettings] = useState({
+    delivery_b2c: false,
+    delivery_retiro: false,
+    pay_pagomovil: false,
+    pay_efectivo: false,
+    pay_transferencia: false,
+    pay_punto: false,
+    pay_otras: false
+  });
+
+  useEffect(() => {
+    const loadSettings = () => {
+      try {
+        const saved = localStorage.getItem('copias_bellavista_disabled_settings');
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          setDisabledSettings({
+            delivery_b2c: parsed.delivery_b2c === true,
+            delivery_retiro: parsed.delivery_retiro === true,
+            pay_pagomovil: parsed.pay_pagomovil === true,
+            pay_efectivo: parsed.pay_efectivo === true,
+            pay_transferencia: parsed.pay_transferencia === true,
+            pay_punto: parsed.pay_punto === true,
+            pay_otras: parsed.pay_otras === true
+          });
+        }
+      } catch (e) {
+        console.error(e);
+      }
+    };
+
+    loadSettings();
+    window.addEventListener('storage', loadSettings);
+    return () => {
+      window.removeEventListener('storage', loadSettings);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (disabledSettings.delivery_retiro && deliveryMethod === 'retiro') {
+      setDeliveryMethod('b2c');
+    } else if (disabledSettings.delivery_b2c && deliveryMethod === 'b2c') {
+      setDeliveryMethod('retiro');
+    }
+  }, [disabledSettings, deliveryMethod]);
+
+  useEffect(() => {
+    const isPayDisabled = (pm: 'pagomovil' | 'efectivo' | 'transferencia') => {
+      if (pm === 'pagomovil' && disabledSettings.pay_pagomovil) return true;
+      if (pm === 'efectivo' && disabledSettings.pay_efectivo) return true;
+      if (pm === 'transferencia' && disabledSettings.pay_transferencia) return true;
+      return false;
+    };
+
+    if (isPayDisabled(paymentMethod)) {
+      if (!disabledSettings.pay_pagomovil) {
+        setPaymentMethod('pagomovil');
+      } else if (!disabledSettings.pay_efectivo) {
+        setPaymentMethod('efectivo');
+      } else if (!disabledSettings.pay_transferencia) {
+        setPaymentMethod('transferencia');
+      }
+    }
+  }, [disabledSettings, paymentMethod]);
+
   const countries = [
     { code: '+58', flag: '🇻🇪', name: 'Venezuela' },
     { code: '+57', flag: '🇨🇴', name: 'Colombia' },
@@ -226,6 +292,15 @@ export default function CartDrawer({
 
   // WhatsApp Order Submission
   const handleConfirmOrder = async () => {
+    if (disabledSettings.delivery_retiro && disabledSettings.delivery_b2c) {
+      setFormError('Lo sentimos, los pedidos y entregas de catálogo están temporalmente inhabilitados.');
+      return;
+    }
+    if (disabledSettings.pay_pagomovil && disabledSettings.pay_efectivo && disabledSettings.pay_transferencia) {
+      setFormError('Lo sentimos, todos los métodos de pago en línea están temporalmente inhabilitados.');
+      return;
+    }
+
     if (!customerName.trim()) {
       setFormError('Por favor, ingresa tu nombre completo para continuar.');
       return;
@@ -236,6 +311,27 @@ export default function CartDrawer({
     }
     if (deliveryMethod === 'b2c' && !address.trim()) {
       setFormError('Por favor, ingresa tu dirección para la entrega a domicilio.');
+      return;
+    }
+
+    if (disabledSettings.delivery_retiro && deliveryMethod === 'retiro') {
+      setFormError('El método de entrega "Retiro en Tienda" está temporalmente inhabilitado.');
+      return;
+    }
+    if (disabledSettings.delivery_b2c && deliveryMethod === 'b2c') {
+      setFormError('El método de entrega "Envío a Domicilio" está temporalmente inhabilitado.');
+      return;
+    }
+    if (disabledSettings.pay_pagomovil && paymentMethod === 'pagomovil') {
+      setFormError('El método de pago "Pagomóvil" está temporalmente inhabilitado.');
+      return;
+    }
+    if (disabledSettings.pay_efectivo && paymentMethod === 'efectivo') {
+      setFormError('El método de pago "Efectivo" está temporalmente inhabilitado.');
+      return;
+    }
+    if (disabledSettings.pay_transferencia && paymentMethod === 'transferencia') {
+      setFormError('El método de pago "Transferencia Bancaria" está temporalmente inhabilitado.');
       return;
     }
 
@@ -589,28 +685,37 @@ export default function CartDrawer({
                           Método de Entrega *
                         </label>
                         <div className="grid grid-cols-2 gap-2">
-                          <button
-                            type="button"
-                            onClick={() => setDeliveryMethod('retiro')}
-                            className={`px-3 py-1.5 text-xs font-bold rounded border transition cursor-pointer text-center ${
-                              deliveryMethod === 'retiro'
-                                ? 'bg-[#FF9900]/10 border-[#FF9900] text-[#131921]'
-                                : 'bg-white border-gray-300 text-gray-600 hover:border-gray-400'
-                            }`}
-                          >
-                            Retiro Tienda
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setDeliveryMethod('b2c')}
-                            className={`px-3 py-1.5 text-xs font-bold rounded border transition cursor-pointer text-center ${
-                              deliveryMethod === 'b2c'
-                                ? 'bg-[#FF9900]/10 border-[#FF9900] text-[#131921]'
-                                : 'bg-white border-gray-300 text-gray-600 hover:border-gray-400'
-                            }`}
-                          >
-                            A Domicilio
-                          </button>
+                          {!disabledSettings.delivery_retiro && (
+                            <button
+                              type="button"
+                              onClick={() => setDeliveryMethod('retiro')}
+                              className={`px-3 py-1.5 text-xs font-bold rounded border transition cursor-pointer text-center ${
+                                deliveryMethod === 'retiro'
+                                  ? 'bg-[#FF9900]/10 border-[#FF9900] text-[#131921]'
+                                  : 'bg-white border-gray-300 text-gray-600 hover:border-gray-400'
+                              }`}
+                            >
+                              Retiro Tienda
+                            </button>
+                          )}
+                          {!disabledSettings.delivery_b2c && (
+                            <button
+                              type="button"
+                              onClick={() => setDeliveryMethod('b2c')}
+                              className={`px-3 py-1.5 text-xs font-bold rounded border transition cursor-pointer text-center ${
+                                deliveryMethod === 'b2c'
+                                  ? 'bg-[#FF9900]/10 border-[#FF9900] text-[#131921]'
+                                  : 'bg-white border-gray-300 text-gray-600 hover:border-gray-400'
+                              }`}
+                            >
+                              A Domicilio
+                            </button>
+                          )}
+                          {disabledSettings.delivery_retiro && disabledSettings.delivery_b2c && (
+                            <div className="col-span-2 p-2.5 bg-rose-50 border border-rose-150 text-rose-800 text-center text-xs font-bold rounded-lg">
+                              ⚠️ Entregas y retiros de catálogo deshabilitados.
+                            </div>
+                          )}
                         </div>
                       </div>
 
@@ -715,9 +820,12 @@ export default function CartDrawer({
                           onChange={(e) => setPaymentMethod(e.target.value as any)}
                           className="w-full px-3 py-2 text-xs text-[#0F1111] bg-white border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-[#FF9900] cursor-pointer font-bold"
                         >
-                          <option value="pagomovil">Pagomóvil</option>
-                          <option value="efectivo">Efectivo (USD / Bs)</option>
-                          <option value="transferencia">Transferencia Bancaria</option>
+                          {!disabledSettings.pay_pagomovil && <option value="pagomovil">Pagomóvil</option>}
+                          {!disabledSettings.pay_efectivo && <option value="efectivo">Efectivo (USD / Bs)</option>}
+                          {!disabledSettings.pay_transferencia && <option value="transferencia">Transferencia Bancaria</option>}
+                          {disabledSettings.pay_pagomovil && disabledSettings.pay_efectivo && disabledSettings.pay_transferencia && (
+                            <option value="">⚠️ No hay métodos de pago habilitados</option>
+                          )}
                         </select>
                       </div>
 
