@@ -296,10 +296,22 @@ export const dbService = {
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString()
     };
+
+    // If barcode_qr is empty or null, remove it from the payload to avoid error if column does not exist
+    if (!newProduct.barcode_qr || newProduct.barcode_qr.trim() === '') {
+      delete (newProduct as any).barcode_qr;
+    }
     
-    const { data, error } = await supabase.from('products').insert([newProduct]).select();
-    if (error) throw error;
-    return data[0] as Product;
+    try {
+      const { data, error } = await supabase.from('products').insert([newProduct]).select();
+      if (error) throw error;
+      return data[0] as Product;
+    } catch (err: any) {
+      if (err && (err.code === '42703' || (err.message && err.message.includes('barcode_qr')))) {
+        throw new Error('El campo Código de Barra/QR requiere que actualices la base de datos en Supabase. Por favor, ve a Configuración (icono de engranaje) en el panel de administración, copia la consulta de actualización de esquema SQL y ejecútala en la consola de Supabase SQL Editor. O bien, deja el campo de Código de Barra/QR vacío para guardar.');
+      }
+      throw err;
+    }
   },
 
   async updateProduct(id: string, product: Partial<Product>): Promise<Product> {
@@ -317,9 +329,21 @@ export const dbService = {
       updated_at: new Date().toISOString()
     };
 
-    const { data, error } = await supabase.from('products').update(updatedFields).eq('id', id).select();
-    if (error) throw error;
-    return data[0] as Product;
+    // If barcode_qr is empty or null, remove it from the payload to avoid error if column does not exist
+    if (!updatedFields.barcode_qr || String(updatedFields.barcode_qr).trim() === '') {
+      delete (updatedFields as any).barcode_qr;
+    }
+
+    try {
+      const { data, error } = await supabase.from('products').update(updatedFields).eq('id', id).select();
+      if (error) throw error;
+      return data[0] as Product;
+    } catch (err: any) {
+      if (err && (err.code === '42703' || (err.message && err.message.includes('barcode_qr')))) {
+        throw new Error('El campo Código de Barra/QR requiere que actualices la base de datos en Supabase. Por favor, ve a Configuración (icono de engranaje) en el panel de administración, copia la consulta de actualización de esquema SQL y ejecútala en la consola de Supabase SQL Editor. O bien, deja el campo de Código de Barra/QR vacío para guardar.');
+      }
+      throw err;
+    }
   },
 
   async deleteProduct(id: string): Promise<boolean> {
