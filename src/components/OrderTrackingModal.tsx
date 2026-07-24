@@ -10,18 +10,25 @@ import { dbService } from '../lib/supabase.ts';
 interface OrderTrackingModalProps {
   orderId: string;
   onClose: () => void;
+  activeOrders?: Order[];
+  onRefreshActiveOrders?: () => void;
 }
 
-export default function OrderTrackingModal({ orderId, onClose }: OrderTrackingModalProps) {
+export default function OrderTrackingModal({ orderId, onClose, activeOrders = [], onRefreshActiveOrders }: OrderTrackingModalProps) {
+  const [currentOrderId, setCurrentOrderId] = useState<string>(orderId);
   const [order, setOrder] = useState<Order | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  useEffect(() => {
+    setCurrentOrderId(orderId);
+  }, [orderId]);
+
   const fetchOrder = async (isManual = false) => {
     if (isManual) setIsRefreshing(true);
     try {
-      if (orderId === 'temp-last-order') {
+      if (currentOrderId === 'temp-last-order') {
         // Fallback mockup if Supabase is offline or order wasn't saved
         const localItemsStr = localStorage.getItem('copias_bellavista_last_order_items') || '[]';
         setOrder({
@@ -39,10 +46,13 @@ export default function OrderTrackingModal({ orderId, onClose }: OrderTrackingMo
           order_number: 7
         });
       } else {
-        const data = await dbService.getOrder(orderId);
+        const data = await dbService.getOrder(currentOrderId);
         if (data) {
           setOrder(data);
           setError(null);
+          if (onRefreshActiveOrders) {
+            onRefreshActiveOrders();
+          }
         } else {
           setError('No pudimos encontrar los detalles del pedido en la base de datos.');
         }
@@ -57,6 +67,7 @@ export default function OrderTrackingModal({ orderId, onClose }: OrderTrackingMo
   };
 
   useEffect(() => {
+    setIsLoading(true);
     fetchOrder();
 
     // Set up polling interval to check order status in real-time every 8 seconds
@@ -65,7 +76,7 @@ export default function OrderTrackingModal({ orderId, onClose }: OrderTrackingMo
     }, 8000);
 
     return () => clearInterval(interval);
-  }, [orderId]);
+  }, [currentOrderId]);
 
   // Determine current active index of the step
   // States: 'pendiente' / 'recibido' -> 'preparacion' -> 'en_camino' / 'listo' -> 'entregado'
@@ -83,7 +94,8 @@ export default function OrderTrackingModal({ orderId, onClose }: OrderTrackingMo
     if (s === 'entregado') return 'Entregado';
     if (s === 'en_camino' || s === 'en camino') return 'En camino a tu dirección';
     if (s === 'listo' || s === 'listo para retirar') return 'Listo para retirar en tienda';
-    if (s === 'preparacion' || s === 'en preparacion') return 'En preparación';
+    if (s === 'preparacion' || s === 'en preparacion' || s === 'preparando') return 'En preparación';
+    if (s === 'cancelado') return 'Cancelado (Pedido anulado)';
     
     // Default or fallback based on delivery method
     if (s === 'pendiente' || s === 'recibido') {
@@ -115,11 +127,19 @@ export default function OrderTrackingModal({ orderId, onClose }: OrderTrackingMo
     return method;
   };
 
+  const formatOrderNumber = (num: number | string | undefined | null) => {
+    if (num === undefined || num === null) return '0000001';
+    const parsed = parseInt(String(num), 10);
+    if (isNaN(parsed)) return String(num);
+    return String(parsed).padStart(7, '0');
+  };
+
   const isPaid = order?.payment_status?.toLowerCase() === 'pagado';
 
   const sendWhatsAppHelp = () => {
     if (!order) return;
-    const msg = `Hola Copias Bella Vista, estoy consultando el estado de mi pedido #${order.order_number || 'N/A'} (ID: ${order.id}). ¿Tienen alguna actualización?`;
+    const orderNumText = formatOrderNumber(order.order_number);
+    const msg = `Hola Copias Bella Vista, estoy consultando el estado de mi pedido #${orderNumText} (ID: ${order.id}). ¿Tienen alguna actualización?`;
     window.open(`https://api.whatsapp.com/send?phone=584125043857&text=${encodeURIComponent(msg)}`, '_blank');
   };
 
@@ -160,6 +180,34 @@ export default function OrderTrackingModal({ orderId, onClose }: OrderTrackingMo
 
         {/* Content Body */}
         <div className="flex-1 overflow-y-auto p-5 space-y-5 text-center">
+          {/* Active Orders Switcher Selector */}
+          {activeOrders && activeOrders.length > 1 && (
+            <div className="bg-[#008296]/5 p-2.5 rounded-lg border border-[#008296]/15 text-left mb-2 select-none animate-fadeIn">
+              <p className="text-[10px] text-[#008296] font-black uppercase tracking-wider mb-2">Pedidos activos en proceso ({activeOrders.length}):</p>
+              <div className="flex flex-wrap gap-1.5">
+                {activeOrders.map((actOrder) => {
+                  if (!actOrder || !actOrder.id) return null;
+                  const isSelected = actOrder.id === currentOrderId;
+                  return (
+                    <button
+                      key={actOrder.id}
+                      onClick={() => {
+                        setCurrentOrderId(actOrder.id!);
+                      }}
+                      className={`px-3 py-1.5 rounded-md text-xs font-black transition cursor-pointer border ${
+                        isSelected
+                          ? 'bg-[#008296] text-white border-[#008296] shadow-sm'
+                          : 'bg-white text-gray-700 hover:bg-gray-50 border-gray-200'
+                      }`}
+                    >
+                      #{formatOrderNumber(actOrder.order_number)} ({getStatusText(actOrder.status, actOrder.delivery_method)})
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
           {isLoading ? (
             <div className="py-12 flex flex-col items-center justify-center gap-3">
               <RefreshCw className="w-8 h-8 animate-spin text-[#FF9900]" />
@@ -181,7 +229,7 @@ export default function OrderTrackingModal({ orderId, onClose }: OrderTrackingMo
               <div className="bg-gray-50 rounded-lg p-4 border border-gray-100 flex justify-between items-center text-left">
                 <div>
                   <p className="text-[10px] text-gray-400 font-black uppercase tracking-wider">Número de Pedido</p>
-                  <p className="text-2xl font-black text-[#131921]">#{order.order_number || 7}</p>
+                  <p className="text-2xl font-black text-[#131921]">#{formatOrderNumber(order.order_number)}</p>
                   <p className="text-[11px] text-[#008296] font-bold mt-0.5">
                     Cliente: <span className="text-gray-800">{order.customer_name}</span>
                   </p>
@@ -202,59 +250,88 @@ export default function OrderTrackingModal({ orderId, onClose }: OrderTrackingMo
               </div>
 
               {/* Status Header text */}
-              <div className="space-y-1 bg-[#008296]/5 border border-[#008296]/20 p-3 rounded-lg text-left">
-                <span className="text-[10px] font-black text-[#008296] uppercase tracking-widest">Estatus Actual</span>
-                <p className="text-base font-black text-gray-900 leading-tight">
+              <div className={`space-y-1 p-3 rounded-lg text-left border ${
+                order.status.toLowerCase() === 'cancelado' 
+                  ? 'bg-rose-50 border-rose-200 text-rose-950' 
+                  : order.status.toLowerCase() === 'entregado'
+                  ? 'bg-emerald-50 border-emerald-200 text-emerald-950'
+                  : 'bg-[#008296]/5 border-[#008296]/20 text-gray-950'
+              }`}>
+                <span className={`text-[10px] font-black uppercase tracking-widest ${
+                  order.status.toLowerCase() === 'cancelado' 
+                    ? 'text-rose-600' 
+                    : order.status.toLowerCase() === 'entregado'
+                    ? 'text-emerald-600'
+                    : 'text-[#008296]'
+                }`}>
+                  Estatus Actual
+                </span>
+                <p className="text-base font-black leading-tight">
                   {getStatusText(order.status, order.delivery_method)}
                 </p>
               </div>
 
-              {/* Visual Stepper Horizontal */}
-              <div className="py-4 px-2 relative">
-                {/* Connecting Line background */}
-                <div className="absolute top-8 left-8 right-8 h-1 bg-gray-200 -z-10 rounded" />
-                {/* Connecting Active Line progress */}
-                <div 
-                  className="absolute top-8 left-8 h-1 bg-[#FF9900] -z-10 rounded transition-all duration-500" 
-                  style={{ width: `${(activeIndex / (steps.length - 1)) * 100}%` }}
-                />
-
-                {/* Steps markers */}
-                <div className="grid grid-cols-4 relative z-10">
-                  {steps.map((step, idx) => {
-                    const Icon = step.icon;
-                    const isCompleted = idx < activeIndex;
-                    const isActive = idx === activeIndex;
-                    const isFuture = idx > activeIndex;
-
-                    return (
-                      <div key={idx} className="flex flex-col items-center text-center space-y-2">
-                        {/* Step Circle */}
-                        <div className={`w-9 h-9 rounded-full flex items-center justify-center border-2 transition duration-300 shadow-sm ${
-                          isCompleted 
-                            ? 'bg-[#FF9900] border-[#FF9900] text-[#131921]' 
-                            : isActive 
-                            ? 'bg-white border-[#FF9900] text-[#FF9900] scale-110 ring-4 ring-[#FF9900]/10' 
-                            : 'bg-white border-gray-300 text-gray-400'
-                        }`}>
-                          <Icon className="w-4 h-4 font-black" />
-                        </div>
-                        {/* Label */}
-                        <div className="space-y-0.5">
-                          <p className={`text-[9px] leading-tight font-extrabold uppercase tracking-wider ${
-                            isActive ? 'text-[#131921] font-black' : isCompleted ? 'text-gray-700' : 'text-gray-400'
-                          }`}>
-                            {step.label}
-                          </p>
-                          <p className="hidden md:block text-[8px] leading-none text-gray-400 font-medium">
-                            {step.desc}
-                          </p>
-                        </div>
-                      </div>
-                    );
-                  })}
+              {/* Dynamic Steps and tracking phases */}
+              {order.status.toLowerCase() === 'cancelado' ? (
+                <div className="bg-rose-50 border border-rose-200 rounded-lg p-4 text-left flex items-start gap-3 animate-fadeIn">
+                  <div className="bg-rose-100 p-2 rounded-lg text-rose-600 shrink-0">
+                    <X className="w-5 h-5 font-black" />
+                  </div>
+                  <div>
+                    <p className="text-xs text-rose-950 font-black uppercase tracking-wider mb-0.5">Pedido Cancelado</p>
+                    <p className="text-[11px] text-rose-700 leading-normal font-semibold">
+                      Este pedido ha sido cancelado o anulado. Si tienes alguna duda o deseas reprogramar, por favor haz clic en "Preguntar por WhatsApp" para comunicarte directamente con nosotros.
+                    </p>
+                  </div>
                 </div>
-              </div>
+              ) : (
+                /* Visual Stepper Horizontal */
+                <div className="py-4 px-2 relative">
+                  {/* Connecting Line background */}
+                  <div className="absolute top-8 left-8 right-8 h-1 bg-gray-200 -z-10 rounded" />
+                  {/* Connecting Active Line progress */}
+                  <div 
+                    className="absolute top-8 left-8 h-1 bg-[#FF9900] -z-10 rounded transition-all duration-500" 
+                    style={{ width: `${(activeIndex / (steps.length - 1)) * 100}%` }}
+                  />
+
+                  {/* Steps markers */}
+                  <div className="grid grid-cols-4 relative z-10">
+                    {steps.map((step, idx) => {
+                      const Icon = step.icon;
+                      const isCompleted = idx < activeIndex;
+                      const isActive = idx === activeIndex;
+                      const isFuture = idx > activeIndex;
+
+                      return (
+                        <div key={idx} className="flex flex-col items-center text-center space-y-2">
+                          {/* Step Circle */}
+                          <div className={`w-9 h-9 rounded-full flex items-center justify-center border-2 transition duration-300 shadow-sm ${
+                            isCompleted 
+                              ? 'bg-[#FF9900] border-[#FF9900] text-[#131921]' 
+                              : isActive 
+                              ? 'bg-white border-[#FF9900] text-[#FF9900] scale-110 ring-4 ring-[#FF9900]/10' 
+                              : 'bg-white border-gray-300 text-gray-400'
+                          }`}>
+                            <Icon className="w-4 h-4 font-black" />
+                          </div>
+                          {/* Label */}
+                          <div className="space-y-0.5">
+                            <p className={`text-[9px] leading-tight font-extrabold uppercase tracking-wider ${
+                              isActive ? 'text-[#131921] font-black' : isCompleted ? 'text-gray-700' : 'text-gray-400'
+                            }`}>
+                              {step.label}
+                            </p>
+                            <p className="hidden md:block text-[8px] leading-none text-gray-400 font-medium">
+                              {step.desc}
+                            </p>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
 
               {/* Loyalty Gamification points */}
               <div className="bg-amber-50/75 border border-amber-200 rounded-lg p-3 text-left flex items-start gap-3">

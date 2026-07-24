@@ -17,7 +17,7 @@ export default function InfoModal({ onClose }: InfoModalProps) {
 
   // Schedule matrix logic
   // Monday to Saturday (1 to 6):
-  // 08:30 AM – 12:00 PM (510 to 720 minutes)
+  // 08:00 AM – 12:00 PM (480 to 720 minutes)
   // 02:30 PM – 06:00 PM (870 to 1080 minutes)
   // Sunday (0): Closed
   useEffect(() => {
@@ -29,7 +29,7 @@ export default function InfoModal({ onClose }: InfoModalProps) {
       const minutes = now.getMinutes();
       const currentMinutes = hours * 60 + minutes;
 
-      const morningStart = 8 * 60 + 30;    // 08:30 AM = 510 mins
+      const morningStart = 8 * 60;         // 08:00 AM = 480 mins
       const morningEnd = 12 * 60;          // 12:00 PM = 720 mins
       const afternoonStart = 14 * 60 + 30; // 02:30 PM = 870 mins
       const afternoonEnd = 18 * 60;        // 06:00 PM = 1080 mins
@@ -41,7 +41,7 @@ export default function InfoModal({ onClose }: InfoModalProps) {
 
       if (day === 0) {
         setIsOpenNow(false);
-        setStatusText('Cerrado - Abre el Lunes a las 08:30 AM');
+        setStatusText('Cerrado - Abre el Lunes a las 08:00 AM');
         return;
       }
 
@@ -57,12 +57,12 @@ export default function InfoModal({ onClose }: InfoModalProps) {
       } else {
         setIsOpenNow(false);
         if (currentMinutes < morningStart) {
-          setStatusText('Cerrado - Abre hoy a las 08:30 AM');
+          setStatusText('Cerrado - Abre hoy a las 08:00 AM');
         } else if (currentMinutes < afternoonStart) {
           setStatusText('Cerrado - Abre hoy a las 02:30 PM');
         } else {
           const nextDay = day === 6 ? 'el Lunes' : 'mañana';
-          setStatusText(`Cerrado - Abre ${nextDay} a las 08:30 AM`);
+          setStatusText(`Cerrado - Abre ${nextDay} a las 08:00 AM`);
         }
       }
     };
@@ -103,9 +103,9 @@ export default function InfoModal({ onClose }: InfoModalProps) {
           </button>
         </div>
 
-        <div className="p-6 space-y-6">
+        <div className="p-4.5 space-y-4">
           {/* Badge dinámico de estado */}
-          <div className="bg-gray-50 border border-gray-100 rounded-lg p-4 flex flex-col sm:flex-row items-center sm:justify-between gap-4">
+          <div className="bg-gray-50 border border-gray-100 rounded-lg p-3 flex flex-col sm:flex-row items-center sm:justify-between gap-3">
             <div className="flex items-center gap-3">
               <Clock className="w-5 h-5 text-gray-500" />
               <div className="text-left">
@@ -130,38 +130,38 @@ export default function InfoModal({ onClose }: InfoModalProps) {
           </div>
 
           {/* Información de Contacto & Dirección */}
-          <div className="space-y-4">
+          <div className="space-y-2.5">
             <h3 className="text-xs text-gray-400 font-extrabold uppercase tracking-widest text-left border-b border-gray-100 pb-1">
               Detalles del Establecimiento
             </h3>
             
             {/* Dirección */}
-            <div className="flex items-start gap-3.5">
-              <div className="bg-amber-50 text-amber-600 p-2 rounded-lg mt-0.5">
-                <MapPin className="w-5 h-5" />
+            <div className="flex items-start gap-2.5">
+              <div className="bg-amber-50 text-amber-600 p-1.5 rounded-lg mt-0.5">
+                <MapPin className="w-4 h-4" />
               </div>
               <div className="text-left">
-                <p className="text-xs text-gray-400 font-bold uppercase tracking-wider">Dirección de la Tienda</p>
-                <p className="text-sm text-gray-800 font-bold leading-relaxed">
+                <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Dirección de la Tienda</p>
+                <p className="text-xs text-gray-800 font-bold leading-normal">
                   Carrera 6 entre Calle 19 y 20, local 1-3
                 </p>
-                <p className="text-xs text-gray-500">Barinitas, Estado Barinas, Venezuela</p>
+                <p className="text-[11px] text-gray-500">Barinitas, Estado Barinas, Venezuela</p>
               </div>
             </div>
 
             {/* WhatsApp */}
-            <div className="flex items-start gap-3.5">
-              <div className="bg-emerald-50 text-emerald-600 p-2 rounded-lg mt-0.5">
-                <Phone className="w-5 h-5" />
+            <div className="flex items-start gap-2.5">
+              <div className="bg-emerald-50 text-emerald-600 p-1.5 rounded-lg mt-0.5">
+                <Phone className="w-4 h-4" />
               </div>
               <div className="text-left flex-1">
-                <p className="text-xs text-gray-400 font-bold uppercase tracking-wider">Enlace de WhatsApp</p>
-                <p className="text-sm text-gray-800 font-bold">{whatsappNumber}</p>
+                <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Enlace de WhatsApp</p>
+                <p className="text-xs text-gray-800 font-bold">{whatsappNumber}</p>
                 <a 
                   href={whatsappUrl} 
                   target="_blank" 
                   rel="noreferrer"
-                  className="inline-flex items-center gap-1.5 text-xs text-emerald-600 hover:text-emerald-700 font-extrabold mt-1 hover:underline transition"
+                  className="inline-flex items-center gap-1 text-[11px] text-emerald-600 hover:text-emerald-700 font-extrabold mt-0.5 hover:underline transition"
                 >
                   Chatear directamente por WhatsApp &rarr;
                 </a>
@@ -170,19 +170,19 @@ export default function InfoModal({ onClose }: InfoModalProps) {
           </div>
 
           {/* Tipos de servicio soportados */}
-          <div className="space-y-3">
+          <div className="space-y-2">
             <h3 className="text-xs text-gray-400 font-extrabold uppercase tracking-widest text-left border-b border-gray-100 pb-1">
               Tipos de Servicio Soportados
             </h3>
             
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 pt-1">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-0.5">
               {/* Servicio A domicilio */}
-              <div className="border border-gray-200 rounded-lg p-3.5 flex items-center gap-3 bg-gray-50 hover:bg-gray-100/50 transition">
+              <div className="border border-gray-200 rounded-lg p-2.5 flex items-center gap-2.5 bg-gray-50 hover:bg-gray-100/50 transition">
                 <input 
                   type="checkbox" 
                   checked 
                   disabled 
-                  className="w-4 h-4 text-[#FF9900] bg-gray-100 border-gray-300 rounded focus:ring-amber-500 cursor-not-allowed" 
+                  className="w-3.5 h-3.5 text-[#FF9900] bg-gray-100 border-gray-300 rounded focus:ring-amber-500 cursor-not-allowed" 
                 />
                 <div className="text-left">
                   <p className="text-xs text-gray-800 font-black flex items-center gap-1">
@@ -194,12 +194,12 @@ export default function InfoModal({ onClose }: InfoModalProps) {
               </div>
 
               {/* Servicio Retiro en tienda */}
-              <div className="border border-gray-200 rounded-lg p-3.5 flex items-center gap-3 bg-gray-50 hover:bg-gray-100/50 transition">
+              <div className="border border-gray-200 rounded-lg p-2.5 flex items-center gap-2.5 bg-gray-50 hover:bg-gray-100/50 transition">
                 <input 
                   type="checkbox" 
                   checked 
                   disabled 
-                  className="w-4 h-4 text-[#FF9900] bg-gray-100 border-gray-300 rounded focus:ring-amber-500 cursor-not-allowed" 
+                  className="w-3.5 h-3.5 text-[#FF9900] bg-gray-100 border-gray-300 rounded focus:ring-amber-500 cursor-not-allowed" 
                 />
                 <div className="text-left">
                   <p className="text-xs text-gray-800 font-black flex items-center gap-1">
@@ -213,52 +213,52 @@ export default function InfoModal({ onClose }: InfoModalProps) {
           </div>
 
           {/* Matriz de Horarios */}
-          <div className="space-y-2 bg-[#F7F9FA] rounded-lg p-4 border border-gray-200">
+          <div className="space-y-1.5 bg-[#F7F9FA] rounded-lg p-3 border border-gray-200">
             <h4 className="text-xs text-gray-700 font-black text-left flex items-center gap-1.5 uppercase">
               <Clock className="w-4 h-4 text-[#FF9900]" />
               Matriz de Horarios de Atención
             </h4>
-            <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-xs text-gray-600 pt-1.5 text-left font-medium">
-              <div className="flex justify-between border-b border-gray-100 pb-1">
+            <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-[11px] text-gray-600 pt-1 text-left font-medium">
+              <div className="flex justify-between border-b border-gray-100 pb-0.5">
                 <span className="font-bold text-gray-800">Lunes</span>
               </div>
-              <div className="border-b border-gray-100 pb-1 text-right font-semibold text-gray-700">
-                08:30 AM – 12:00 PM y 02:30 PM – 06:00 PM
+              <div className="border-b border-gray-100 pb-0.5 text-right font-semibold text-gray-700">
+                08:00 a 12:00 - 2:30 a 6:00
               </div>
 
-              <div className="flex justify-between border-b border-gray-100 pb-1">
+              <div className="flex justify-between border-b border-gray-100 pb-0.5">
                 <span className="font-bold text-gray-800">Martes</span>
               </div>
-              <div className="border-b border-gray-100 pb-1 text-right font-semibold text-gray-700">
-                08:30 AM – 12:00 PM y 02:30 PM – 06:00 PM
+              <div className="border-b border-gray-100 pb-0.5 text-right font-semibold text-gray-700">
+                08:00 a 12:00 - 2:30 a 6:00
               </div>
 
-              <div className="flex justify-between border-b border-gray-100 pb-1">
+              <div className="flex justify-between border-b border-gray-100 pb-0.5">
                 <span className="font-bold text-gray-800">Miércoles</span>
               </div>
-              <div className="border-b border-gray-100 pb-1 text-right font-semibold text-gray-700">
-                08:30 AM – 12:00 PM y 02:30 PM – 06:00 PM
+              <div className="border-b border-gray-100 pb-0.5 text-right font-semibold text-gray-700">
+                08:00 a 12:00 - 2:30 a 6:00
               </div>
 
-              <div className="flex justify-between border-b border-gray-100 pb-1">
+              <div className="flex justify-between border-b border-gray-100 pb-0.5">
                 <span className="font-bold text-gray-800">Jueves</span>
               </div>
-              <div className="border-b border-gray-100 pb-1 text-right font-semibold text-gray-700">
-                08:30 AM – 12:00 PM y 02:30 PM – 06:00 PM
+              <div className="border-b border-gray-100 pb-0.5 text-right font-semibold text-gray-700">
+                08:00 a 12:00 - 2:30 a 6:00
               </div>
 
-              <div className="flex justify-between border-b border-gray-100 pb-1">
+              <div className="flex justify-between border-b border-gray-100 pb-0.5">
                 <span className="font-bold text-gray-800">Viernes</span>
               </div>
-              <div className="border-b border-gray-100 pb-1 text-right font-semibold text-gray-700">
-                08:30 AM – 12:00 PM y 02:30 PM – 06:00 PM
+              <div className="border-b border-gray-100 pb-0.5 text-right font-semibold text-gray-700">
+                08:00 a 12:00 - 2:30 a 6:00
               </div>
 
-              <div className="flex justify-between border-b border-gray-100 pb-1">
+              <div className="flex justify-between border-b border-gray-100 pb-0.5">
                 <span className="font-bold text-gray-800">Sábado</span>
               </div>
-              <div className="border-b border-gray-100 pb-1 text-right font-semibold text-gray-700">
-                08:30 AM – 12:00 PM y 02:30 PM – 06:00 PM
+              <div className="border-b border-gray-100 pb-0.5 text-right font-semibold text-gray-700">
+                08:00 a 12:00 - 2:30 a 6:00
               </div>
 
               <div className="flex justify-between text-rose-600 font-bold">

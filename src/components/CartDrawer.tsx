@@ -3,11 +3,66 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { X, Trash2, Plus, Minus, ShoppingCart, MessageCircle, AlertCircle, MapPin, Navigation, Loader2 } from 'lucide-react';
 import { Product, CartItem } from '../types.ts';
 import { dbService } from '../lib/supabase.ts';
+import { CurrencyCode, formatCurrency, CURRENCIES } from '../lib/currency';
+
+interface CartQtyInputProps {
+  initialQty: number;
+  stock: number;
+  onQtyChange: (newQty: number) => void;
+}
+
+const CartQtyInput: React.FC<CartQtyInputProps> = ({ initialQty, stock, onQtyChange }) => {
+  const [localVal, setLocalVal] = useState<string>(initialQty.toString());
+
+  useEffect(() => {
+    setLocalVal(initialQty.toString());
+  }, [initialQty]);
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const rawVal = e.target.value;
+    if (/^\d*$/.test(rawVal)) {
+      setLocalVal(rawVal);
+      const numericVal = parseInt(rawVal, 10);
+      if (!isNaN(numericVal) && numericVal > 0) {
+        if (numericVal <= stock) {
+          onQtyChange(numericVal);
+        } else {
+          onQtyChange(stock);
+        }
+      }
+    }
+  };
+
+  const handleBlur = () => {
+    const numericVal = parseInt(localVal, 10);
+    if (isNaN(numericVal) || numericVal <= 0) {
+      setLocalVal("1");
+      onQtyChange(1);
+    } else if (numericVal > stock) {
+      setLocalVal(stock.toString());
+      onQtyChange(stock);
+    } else {
+      setLocalVal(numericVal.toString());
+    }
+  };
+
+  return (
+    <input
+      type="text"
+      inputMode="numeric"
+      pattern="[0-9]*"
+      value={localVal}
+      onChange={handleChange}
+      onBlur={handleBlur}
+      className="w-10 py-0.5 text-center font-extrabold text-gray-800 text-xs bg-gray-50 border-x border-gray-300 focus:outline-none focus:ring-1 focus:ring-[#005da9] focus:bg-white transition"
+    />
+  );
+};
 
 interface CartDrawerProps {
   isOpen: boolean;
@@ -18,6 +73,8 @@ interface CartDrawerProps {
   onClearCart: () => void;
   productImages: { product_id: string; image_url: string }[];
   onOrderSuccess?: (orderId: string) => void;
+  activeCurrency: CurrencyCode;
+  currencyRates: Record<CurrencyCode, number>;
 }
 
 export default function CartDrawer({
@@ -28,11 +85,14 @@ export default function CartDrawer({
   onRemoveItem,
   onClearCart,
   productImages,
-  onOrderSuccess
+  onOrderSuccess,
+  activeCurrency,
+  currencyRates
 }: CartDrawerProps) {
   // Customer info form state
   const [customerName, setCustomerName] = useState('');
   const [customerPhone, setCustomerPhone] = useState('');
+  const [customerEmail, setCustomerEmail] = useState('');
   const [countryPrefix, setCountryPrefix] = useState('+58');
   const [deliveryMethod, setDeliveryMethod] = useState<'b2c' | 'retiro'>('retiro');
   const [address, setAddress] = useState('');
@@ -190,8 +250,9 @@ export default function CartDrawer({
         setFormError('Por favor, ingresa un monto válido.');
         return;
       }
-      if (amountNum < totalPrice) {
-        setFormError(`El monto a pagar ($${amountNum.toFixed(2)}) no puede ser menor al total del pedido ($${totalPrice.toFixed(2)}).`);
+      const convertedTotal = totalPrice * (currencyRates[activeCurrency] || 1);
+      if (amountNum < convertedTotal) {
+        setFormError(`El monto a pagar (${formatCurrency(amountNum / (currencyRates[activeCurrency] || 1), activeCurrency, currencyRates)}) no puede ser menor al total del pedido (${formatCurrency(totalPrice, activeCurrency, currencyRates)}).`);
         return;
       }
     }
@@ -200,6 +261,7 @@ export default function CartDrawer({
 
     const fullPhone = `${countryPrefix} ${customerPhone.trim()}`;
     let createdOrderId = '';
+    let orderNumStr = '';
 
     // Calculate loyalty points: $1 spent = 1 point, minimum of 1
     const loyaltyPoints = Math.max(1, Math.floor(totalPrice));
@@ -220,6 +282,7 @@ export default function CartDrawer({
       const orderData = {
         customer_name: customerName.trim(),
         phone_number: fullPhone,
+        customer_email: customerEmail.trim() || null,
         delivery_method: deliveryMethod,
         address_text: deliveryMethod === 'b2c' ? address.trim() : null,
         items: orderItems,
@@ -236,18 +299,30 @@ export default function CartDrawer({
       if (created && created.id) {
         createdOrderId = created.id;
         localStorage.setItem('copias_bellavista_last_order_id', created.id);
+        if (created.order_number) {
+          orderNumStr = String(created.order_number).padStart(7, '0');
+        }
       }
     } catch (e) {
       console.warn("Could not save order to Supabase. This might be because the table is not created yet or Supabase is not configured.", e);
       // We still proceed to send WhatsApp as it is the primary checkout flow!
     }
 
+    if (!orderNumStr) {
+      // Temporary sequential estimate or standard fallback starting with "0000001"
+      orderNumStr = '0000001';
+    }
+
     const phoneNumber = '584125043857'; // Business contact number in Barinitas
     
-    // Construct message
-    let message = `🛒 *NUEVO PEDIDO - COPIAS BELLA VISTA* 🛒\n\n`;
+    // Construct message with reduced spacing between lines
+    let message = `🛒 *NUEVO PEDIDO - COPIAS BELLA VISTA* 🛒\n`;
+    message += `🆔 *Pedido N°:* #${orderNumStr}\n`;
     message += `👤 *Cliente:* ${customerName.trim()}\n`;
     message += `📞 *Teléfono:* ${fullPhone}\n`;
+    if (customerEmail.trim()) {
+      message += `✉️ *Correo:* ${customerEmail.trim()}\n`;
+    }
     message += `📦 *Entrega:* ${deliveryMethod === 'retiro' ? 'Retiro en Tienda (Bella Vista, Barinitas)' : 'Envío a Domicilio'}\n`;
     if (deliveryMethod === 'b2c') {
       message += `📍 *Dirección:* ${address.trim()}\n`;
@@ -262,7 +337,7 @@ export default function CartDrawer({
 
     if (paymentMethod === 'efectivo') {
       const payWith = parseFloat(paymentAmountWith);
-      message += `💵 *Paga con:* $${payWith.toFixed(2)} USD (Cambio: $${(payWith - totalPrice).toFixed(2)} USD)\n`;
+      message += `💵 *Paga con:* ${formatCurrency(payWith, activeCurrency, currencyRates)} (Cambio: ${formatCurrency(payWith - totalPrice, activeCurrency, currencyRates)})\n`;
     }
 
     if (comments.trim()) {
@@ -270,19 +345,19 @@ export default function CartDrawer({
     }
 
     message += `🎁 *Puntos Estimados:* +${loyaltyPoints} pts\n`;
-    message += `\n---------------------------------------\n`;
+    message += `---------------------------------------\n`;
     message += `📝 *Detalle del Pedido:*\n`;
 
     cartItems.forEach((item) => {
       const price = item.product.offer_price !== null ? item.product.offer_price : item.product.price;
-      const formattedPrice = `$${price.toFixed(2)} USD`;
-      const itemSubtotal = `$${(price * item.quantity).toFixed(2)} USD`;
+      const formattedPrice = formatCurrency(price, activeCurrency, currencyRates);
+      const itemSubtotal = formatCurrency(price * item.quantity, activeCurrency, currencyRates);
       
       message += `• ${item.quantity}x _${item.product.name}_ (SKU: ${item.product.sku}) - ${formattedPrice} c/u | Subtotal: ${itemSubtotal}\n`;
     });
 
     message += `---------------------------------------\n`;
-    message += `💰 *TOTAL A PAGAR:* *$${totalPrice.toFixed(2)} USD*\n\n`;
+    message += `💰 *TOTAL A PAGAR:* *${formatCurrency(totalPrice, activeCurrency, currencyRates)}*\n`;
     message += `_¡Hola! He armado este pedido desde su catálogo online. ¿Me podrían confirmar la disponibilidad de los productos y los datos de pago? ¡Gracias!_`;
 
     const encodedMessage = encodeURIComponent(message);
@@ -396,9 +471,11 @@ export default function CartDrawer({
                                 >
                                   -
                                 </button>
-                                <span className="px-2 text-xs font-bold text-gray-800 min-w-[1.25rem] text-center">
-                                  {item.quantity}
-                                </span>
+                                <CartQtyInput 
+                                  initialQty={item.quantity}
+                                  stock={item.product.stock}
+                                  onQtyChange={(newQty) => onUpdateQuantity(item.product.id, newQty)}
+                                />
                                 <button
                                   onClick={() => onUpdateQuantity(item.product.id, item.quantity + 1)}
                                   className="px-2 py-0.5 text-gray-500 hover:text-gray-800 font-bold text-xs cursor-pointer"
@@ -409,7 +486,7 @@ export default function CartDrawer({
 
                               {/* Price */}
                               <span className="text-xs font-black text-[#0F1111]">
-                                US${(itemPrice * item.quantity).toFixed(2)}
+                                {formatCurrency(itemPrice * item.quantity, activeCurrency, currencyRates)}
                               </span>
                             </div>
                           </div>
@@ -490,6 +567,20 @@ export default function CartDrawer({
                             className="flex-1 min-w-0 px-3 py-1.5 text-xs text-[#0F1111] border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-[#FF9900]"
                           />
                         </div>
+                      </div>
+
+                      {/* Email input */}
+                      <div>
+                        <label className="block text-[10px] font-black text-gray-500 uppercase tracking-wide mb-1">
+                          Correo Electrónico
+                        </label>
+                        <input
+                          type="email"
+                          value={customerEmail}
+                          onChange={(e) => setCustomerEmail(e.target.value)}
+                          placeholder="Ej. maria@ejemplo.com"
+                          className="w-full px-3 py-1.5 text-xs text-[#0F1111] border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-[#FF9900]"
+                        />
                       </div>
 
                       {/* Delivery Option */}
@@ -673,21 +764,21 @@ export default function CartDrawer({
                             </div>
                             
                             <div className="flex items-center gap-2">
-                              <span className="text-xs text-blue-950 font-extrabold">A pagar con: US$</span>
+                              <span className="text-xs text-blue-950 font-extrabold">A pagar con ({CURRENCIES[activeCurrency].symbol}):</span>
                               <input
                                 type="number"
-                                min={Math.ceil(totalPrice)}
+                                min={Math.ceil(totalPrice * (currencyRates[activeCurrency] || 1))}
                                 step="any"
                                 value={paymentAmountWith}
                                 onChange={(e) => setPaymentAmountWith(e.target.value)}
-                                placeholder={`Mínimo $${totalPrice.toFixed(2)}`}
-                                className="w-28 px-2 py-1 bg-white border border-blue-300 rounded text-xs font-bold text-gray-900 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                placeholder={`Mínimo ${(totalPrice * (currencyRates[activeCurrency] || 1)).toFixed(activeCurrency === 'COP' ? 0 : 2)}`}
+                                className="w-32 px-2 py-1 bg-white border border-blue-300 rounded text-xs font-bold text-gray-900 focus:outline-none focus:ring-1 focus:ring-blue-500"
                               />
                             </div>
 
-                            {parseFloat(paymentAmountWith) > totalPrice && (
+                            {parseFloat(paymentAmountWith) > (totalPrice * (currencyRates[activeCurrency] || 1)) && (
                               <p className="text-[10px] text-blue-800 font-extrabold">
-                                💵 Tu cambio estimado será de: <span className="text-emerald-600 font-black">US$ {(parseFloat(paymentAmountWith) - totalPrice).toFixed(2)}</span>
+                                💵 Tu cambio estimado será de: <span className="text-emerald-600 font-black">{formatCurrency((parseFloat(paymentAmountWith) - (totalPrice * (currencyRates[activeCurrency] || 1))) / (currencyRates[activeCurrency] || 1), activeCurrency, currencyRates)}</span>
                               </p>
                             )}
 
@@ -714,11 +805,11 @@ export default function CartDrawer({
                   <div className="flex justify-between items-baseline border-t border-gray-200 pt-1.5">
                     <span className="font-bold text-[#0F1111]">Total a Pagar:</span>
                     <span className="text-xl font-black text-[#0F1111]">
-                      US$ {totalPrice.toFixed(2)}
+                      {formatCurrency(totalPrice, activeCurrency, currencyRates)}
                     </span>
                   </div>
                   <p className="text-[10px] text-gray-400 font-bold text-center mt-1 uppercase tracking-wide">
-                    • Pago calculado al cambio oficial de la tasa BCV •
+                    • Pago calculado al cambio oficial de la tasa de referencia •
                   </p>
                 </div>
 
@@ -737,7 +828,7 @@ export default function CartDrawer({
                     className="col-span-2 py-2.5 px-4 bg-[#FFA41C] hover:bg-[#FA8900] text-[#0F1111] font-black rounded border border-[#E68200] shadow transition flex items-center justify-center gap-1.5 cursor-pointer text-xs md:text-sm active:scale-95 duration-100"
                   >
                     <MessageCircle className="w-4 h-4 shrink-0 text-[#131921]" />
-                    Pedir (US$ {totalPrice.toFixed(2)})
+                    Pedir ({formatCurrency(totalPrice, activeCurrency, currencyRates)})
                   </button>
                 </div>
               </div>

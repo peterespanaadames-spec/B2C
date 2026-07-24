@@ -7,6 +7,7 @@ import React, { useState, useEffect } from 'react';
 import { X, MessageCircle, Share2, Clipboard, Printer, CheckCircle2, AlertTriangle, ChevronRight, FileText, Download, ShoppingCart } from 'lucide-react';
 import { Product, Category, Brand, ProductImage } from '../types.ts';
 import { dbService } from '../lib/supabase.ts';
+import { CurrencyCode, CURRENCIES, formatCurrency } from '../lib/currency';
 
 interface ProductDetailModalProps {
   product: Product;
@@ -18,6 +19,8 @@ interface ProductDetailModalProps {
   onShare: (product: Product) => void;
   onWhatsAppQuery: (product: Product) => void;
   onAddToCart?: (product: Product, quantity: number) => void;
+  activeCurrency: CurrencyCode;
+  currencyRates: Record<CurrencyCode, number>;
 }
 
 export default function ProductDetailModal({
@@ -29,7 +32,9 @@ export default function ProductDetailModal({
   onViewProduct,
   onShare,
   onWhatsAppQuery,
-  onAddToCart
+  onAddToCart,
+  activeCurrency,
+  currencyRates
 }: ProductDetailModalProps) {
   const [productImages, setProductImages] = useState<ProductImage[]>([]);
   const [selectedImageIndex, setSelectedImageIndex] = useState(0);
@@ -37,27 +42,42 @@ export default function ProductDetailModal({
   const [copiedLink, setCopiedLink] = useState(false);
   const [quantity, setQuantity] = useState(1);
 
-  const formatModalPrice = (price: number, size: 'large' | 'small' = 'large') => {
-    const formattedPrice = price.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-    const [intPart, decPart] = formattedPrice.split('.');
+  const formatModalPrice = (priceUSD: number, size: 'large' | 'small' = 'large') => {
+    const rate = currencyRates[activeCurrency] || 1;
+    const converted = priceUSD * rate;
+    const config = CURRENCIES[activeCurrency];
+    const isCOP = activeCurrency === 'COP';
+    const decimals = config.decimals;
     
-    if (size === 'small') {
+    const formattedNumStr = isCOP ? Math.round(converted).toFixed(0) : converted.toFixed(decimals);
+    
+    const standardParts = formattedNumStr.split('.');
+    const integerPart = standardParts[0];
+    const decimalPart = standardParts[1] || '';
+
+    const formattedInteger = integerPart.replace(/\B(?=(\d{3})+(?!\d))/g, config.thousandSeparator);
+
+    if (config.position === 'prefix') {
       return (
         <div className="flex items-start text-[#0F1111]">
-          <span className="text-[12px] font-bold mt-[1px] mr-[2px]">US$</span>
-          <span className="text-lg font-black leading-none tracking-tight">{intPart}</span>
-          <span className="text-[10px] font-bold ml-[1px] leading-none mt-[2px]">{decPart}</span>
+          <span className={`${size === 'small' ? 'text-[11px] mt-[1px] mr-[2px]' : 'text-[16px] mt-[4px] mr-[4px]'} font-bold`}>{config.symbol}</span>
+          <span className={`${size === 'small' ? 'text-lg' : 'text-3xl'} font-black leading-none tracking-tight`}>{formattedInteger}</span>
+          {decimals > 0 && decimalPart && (
+            <span className={`${size === 'small' ? 'text-[10px] mt-[2px]' : 'text-[14px] mt-[3px]'} font-bold ml-[1px] leading-none`}>{config.decimalSeparator}{decimalPart}</span>
+          )}
+        </div>
+      );
+    } else {
+      return (
+        <div className="flex items-start text-[#0F1111]">
+          <span className={`${size === 'small' ? 'text-lg' : 'text-3xl'} font-black leading-none tracking-tight`}>{formattedInteger}</span>
+          {decimals > 0 && decimalPart && (
+            <span className={`${size === 'small' ? 'text-[10px] mt-[2px]' : 'text-[14px] mt-[3px]'} font-bold ml-[1px] leading-none`}>{config.decimalSeparator}{decimalPart}</span>
+          )}
+          <span className={`${size === 'small' ? 'text-[11px] mt-[1px] ml-[2px]' : 'text-[16px] mt-[4px] ml-[4px]'} font-bold`}>{config.symbol}</span>
         </div>
       );
     }
-    
-    return (
-      <div className="flex items-start text-[#0F1111]">
-        <span className="text-[16px] font-bold mt-[4px] mr-[4px]">US$</span>
-        <span className="text-3xl font-black leading-none tracking-tight">{intPart}</span>
-        <span className="text-[14px] font-bold ml-[1px] leading-none mt-[3px]">{decPart}</span>
-      </div>
-    );
   };
 
   // Load product images and related products
@@ -197,7 +217,7 @@ export default function ProductDetailModal({
           <strong>SKU:</strong> ${product.sku} &nbsp;|&nbsp; 
           <strong>Marca:</strong> ${brand?.name || 'S/M'} &nbsp;|&nbsp; 
           <strong>Categoría:</strong> ${category?.name || 'General'} &nbsp;|&nbsp;
-          <strong>Precio Sugerido:</strong> $${(product.offer_price || product.price).toFixed(2)} USD
+          <strong>Precio Sugerido:</strong> ${formatCurrency(product.offer_price || product.price, activeCurrency, currencyRates)}
         </div>
 
         <div class="section-title">Descripción del Producto</div>
@@ -221,15 +241,15 @@ export default function ProductDetailModal({
           </tr>
           <tr>
             <th>Moneda de Consulta</th>
-            <td>Dólar Americano ($ / USD)</td>
+            <td>${CURRENCIES[activeCurrency].label} (${CURRENCIES[activeCurrency].symbol})</td>
           </tr>
           <tr>
             <th>Precio de Catálogo</th>
-            <td>$${product.price.toFixed(2)} USD</td>
+            <td>${formatCurrency(product.price, activeCurrency, currencyRates)}</td>
           </tr>
           <tr>
             <th>Precio de Oferta Especial</th>
-            <td>${product.offer_price ? `$${product.offer_price.toFixed(2)} USD` : 'N/A'}</td>
+            <td>${product.offer_price ? formatCurrency(product.offer_price, activeCurrency, currencyRates) : 'N/A'}</td>
           </tr>
           <tr>
             <th>Disponibilidad de Stock</th>
@@ -385,11 +405,13 @@ export default function ProductDetailModal({
                 {product.offer_price ? (
                   <div>
                     <span className="text-[10px] md:text-xs font-bold text-red-600 uppercase tracking-widest block mb-0.5">Oferta Distribuidor</span>
-                    <div className="flex items-baseline gap-1.5">
+                    <div className="flex items-baseline gap-1.5 flex-wrap">
                       {formatModalPrice(product.offer_price)}
-                      <span className="text-sm md:text-base text-gray-400 line-through">US${product.price.toFixed(2)}</span>
+                      <span className="text-sm md:text-base text-gray-400 line-through">
+                        {formatCurrency(product.price, activeCurrency, currencyRates)}
+                      </span>
                       <span className="bg-red-100 text-red-600 text-[10px] font-bold px-1.5 py-0.5 rounded-full">
-                        Ahorra US${(product.price - product.offer_price).toFixed(2)}
+                        Ahorra {formatCurrency(product.price - product.offer_price, activeCurrency, currencyRates)}
                       </span>
                     </div>
                   </div>
