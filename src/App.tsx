@@ -6,7 +6,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { 
   Package, LayoutGrid, CheckCircle2, AlertTriangle, 
-  Settings, HelpCircle, Phone, ArrowUp, Info, ShieldAlert, Lock, Bell, ClipboardList
+  Settings, HelpCircle, Phone, ArrowUp, ArrowRight, Info, ShieldAlert, Lock, Bell, ClipboardList
 } from 'lucide-react';
 import { Category, Brand, Product, ProductImage, CartItem, Order } from './types';
 import { dbService } from './lib/supabase.ts';
@@ -21,6 +21,8 @@ import SettingsModal from './components/SettingsModal.tsx';
 import CartDrawer from './components/CartDrawer.tsx';
 import InfoModal from './components/InfoModal.tsx';
 import OrderTrackingModal from './components/OrderTrackingModal.tsx';
+import TortaTresLechesLanding from './components/TortaTresLechesLanding.tsx';
+import BarcodeScannerModal from './components/BarcodeScannerModal.tsx';
 import { Clock } from 'lucide-react';
 import { CurrencyCode, DEFAULT_RATES } from './lib/currency';
 
@@ -183,6 +185,16 @@ export default function App() {
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [showAdminShortcutButton, setShowAdminShortcutButton] = useState(false);
   const [isInfoModalOpen, setIsInfoModalOpen] = useState(false);
+  const [showTresLechesLanding, setShowTresLechesLanding] = useState(false);
+  const [showBarcodeScanner, setShowBarcodeScanner] = useState(false);
+  const [isLandingActive, setIsLandingActive] = useState<boolean>(() => {
+    try {
+      const saved = localStorage.getItem('copias_bellavista_landing_active');
+      return saved !== 'false';
+    } catch (e) {
+      return true;
+    }
+  });
 
   // Shopping Cart States
   const [cart, setCart] = useState<CartItem[]>(() => {
@@ -665,6 +677,8 @@ export default function App() {
         activeCurrency={activeCurrency}
         onCurrencyChange={setActiveCurrency}
         currencyRates={currencyRates}
+        onOpenTresLechesLanding={isLandingActive ? () => setShowTresLechesLanding(true) : undefined}
+        onOpenScanner={() => setShowBarcodeScanner(true)}
       />
 
       {/* Main Application Body */}
@@ -747,6 +761,11 @@ export default function App() {
             onCurrencyChange={setActiveCurrency}
             currencyRates={currencyRates}
             onUpdateCurrencyRate={updateCurrencyRate}
+            isLandingActive={isLandingActive}
+            onToggleLandingActive={(val) => {
+              setIsLandingActive(val);
+              localStorage.setItem('copias_bellavista_landing_active', String(val));
+            }}
           />
         ) : (
           /* PUBLIC MARKETPLACE VIEW */
@@ -764,6 +783,46 @@ export default function App() {
                 onSelectCategoryByName={handleSelectCategoryByName}
               />
             </div>
+
+            {/* Gourmet Promotion Banner */}
+            {isLandingActive && (
+              <div className="mb-6 bg-gradient-to-r from-amber-950 via-[#3D2314] to-[#4E2F1D] text-white rounded-2xl p-5 md:p-6 shadow-xl border border-amber-900/20 flex flex-col md:flex-row items-center justify-between gap-6 overflow-hidden relative select-none">
+                <div className="absolute top-0 right-0 w-64 h-64 bg-[#FF9900]/5 rounded-full blur-2xl pointer-events-none"></div>
+                <div className="flex flex-col md:flex-row items-center gap-4 text-center md:text-left">
+                  <div className="w-16 h-16 rounded-xl overflow-hidden border-2 border-[#FF9900] shadow-md shrink-0">
+                    <img 
+                      src="https://images.unsplash.com/photo-1578985545062-69928b1d9587?auto=format&fit=crop&q=80&w=120&h=120" 
+                      alt="Tres Leches" 
+                      className="w-full h-full object-cover"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <div className="flex flex-wrap items-center justify-center md:justify-start gap-2">
+                      <span className="bg-[#FF9900]/20 text-[#FF9900] text-[9px] font-black uppercase tracking-widest px-2.5 py-0.5 rounded-full border border-[#FF9900]/30 animate-pulse">
+                        ¡Novedad Dulce! 🍰
+                      </span>
+                      <span className="text-gray-400 font-extrabold text-[10px] uppercase tracking-wider">
+                        Obrador de Postres Artesanales
+                      </span>
+                    </div>
+                    <h3 className="text-base md:text-lg font-serif font-black text-[#FFF5EA] leading-tight">
+                      Torta Tres Leches Choco Arequipe <span className="text-[#FF9900]">(Porción Individual)</span>
+                    </h3>
+                    <p className="text-xs text-gray-300 font-medium leading-normal max-w-xl">
+                      Bizcocho de cacao premium sumergido en infusión de tres leches de chocolate, decorado con hilos de arequipe y lluvia de chocolate. ¡Déjate tentar por nuestra receta especial!
+                    </p>
+                  </div>
+                </div>
+                
+                <button
+                  onClick={() => setShowTresLechesLanding(true)}
+                  className="w-full md:w-auto px-5 py-3 bg-[#FF9900] hover:bg-[#e68a00] text-[#131921] text-xs font-black rounded-xl transition duration-200 uppercase tracking-widest flex items-center justify-center gap-1.5 shadow-lg shrink-0 cursor-pointer hover:scale-105 active:scale-95"
+                >
+                  <span>Descubrir Especial</span>
+                  <ArrowRight className="w-4.5 h-4.5" />
+                </button>
+              </div>
+            )}
 
             <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
               
@@ -1020,6 +1079,31 @@ export default function App() {
           }}
           activeOrders={activeOrders}
           onRefreshActiveOrders={checkActiveOrders}
+        />
+      )}
+
+      {/* 6. TORTA TRES LECHES CHOCO AREQUIPE LANDING PAGE OVERLAY */}
+      {showTresLechesLanding && (
+        <TortaTresLechesLanding
+          products={products}
+          categories={categories}
+          activeCurrency={activeCurrency}
+          currencyRates={currencyRates}
+          onAddToCart={handleAddToCart}
+          onClose={() => setShowTresLechesLanding(false)}
+          onRefreshProducts={loadGlobalData}
+          onOpenCart={() => setIsCartOpen(true)}
+        />
+      )}
+
+      {/* 7. CAMERA BARCODE & QR SCANNER PRICE QUERY MODAL */}
+      {showBarcodeScanner && (
+        <BarcodeScannerModal
+          products={products}
+          onClose={() => setShowBarcodeScanner(false)}
+          onProductFound={(product) => {
+            setSelectedProduct(product);
+          }}
         />
       )}
 
