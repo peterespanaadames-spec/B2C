@@ -10,11 +10,13 @@ import {
   Plus, Edit3, Trash2, Check, AlertTriangle, Printer, Star, Search, Image as ImageIcon, FileText, X, Upload, Download,
   ClipboardList, RefreshCw, Eye, Coins, Truck, Store, Calendar, HelpCircle, Clock, Timer,
   LayoutDashboard, ShieldCheck, Settings, Activity, ArrowRight, Sparkles, TrendingUp, Users,
-  Lock, Unlock, LogOut, Megaphone, ShoppingCart, Barcode } from 'lucide-react';
+  Lock, Unlock, LogOut, Megaphone, ShoppingCart, Barcode, Save
+} from 'lucide-react';
 import { Product, Category, Brand, ProductImage, Order, Provider } from '../types.ts';
 import { dbService } from '../lib/supabase.ts';
 import * as XLSX from 'xlsx';
 import { CurrencyCode, CURRENCIES } from '../lib/currency';
+import MarketingModule from './MarketingModule.tsx';
 
 const OrderTimer = ({ createdAt, status, currentTime }: { createdAt: string | undefined, status: string, currentTime: number }) => {
   const createdDate = createdAt ? new Date(createdAt) : new Date();
@@ -233,6 +235,21 @@ export default function AdminPanel({
   const [chartView, setChartView] = useState<'days' | 'months'>('days');
   const [activeTab, setActiveTab] = useState<'products' | 'categories' | 'brands' | 'orders'>(initialTab || 'products');
   const [settingsTab, setSettingsTab] = useState<'business' | 'bcv' | 'roles' | 'landing'>('business');
+  
+  const [localLandingActive, setLocalLandingActive] = useState(isLandingActive);
+  const [showLandingSaveSuccess, setShowLandingSaveSuccess] = useState(false);
+
+  useEffect(() => {
+    setLocalLandingActive(isLandingActive);
+  }, [isLandingActive]);
+
+  const handleSaveLanding = () => {
+    if (onToggleLandingActive) {
+      onToggleLandingActive(localLandingActive);
+      setShowLandingSaveSuccess(true);
+      setTimeout(() => setShowLandingSaveSuccess(false), 3000);
+    }
+  };
 
   useEffect(() => {
     if (initialMenu) {
@@ -2708,17 +2725,7 @@ export default function AdminPanel({
 
           {/* VIEW: MARKETING */}
           {currentMenu === 'marketing' && (
-            <div className="space-y-6 text-left">
-              <div>
-                <h2 className="text-xl font-black text-[#131921] uppercase tracking-tight flex items-center gap-2">
-                  <Megaphone className="w-6 h-6 text-pink-600" />
-                  <span>Marketing y Promociones</span>
-                </h2>
-                <p className="text-xs text-gray-500 font-medium mt-1">
-                  Módulo en desarrollo para campañas de marketing.
-                </p>
-              </div>
-            </div>
+            <MarketingModule />
           )}
 
           {/* VIEW: PROVEEDORES */}
@@ -3573,33 +3580,49 @@ export default function AdminPanel({
                   </div>
 
                   <div className="space-y-6">
-                    <div className="flex items-start justify-between p-4 bg-amber-50/50 rounded-xl border border-amber-200/50">
-                      <div className="space-y-1 max-w-md text-left">
-                        <h4 className="text-xs font-black text-amber-950 uppercase tracking-wide">Activar Landing Especial de Tres Leches</h4>
-                        <p className="text-[11px] text-amber-900/80 leading-normal">
-                          Al activar esta opción, se mostrará el botón de acceso directo en la barra de navegación principal y el banner promocional gourmet en la sección de inicio.
-                        </p>
-                      </div>
-                      <button
-                        onClick={() => {
-                          if (onToggleLandingActive) {
-                            onToggleLandingActive(!isLandingActive);
-                          }
-                        }}
-                        className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
-                          isLandingActive ? 'bg-[#FF9900]' : 'bg-gray-200'
-                        }`}
-                      >
-                        <span
-                          className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-sm ring-0 transition duration-200 ease-in-out ${
-                            isLandingActive ? 'translate-x-5' : 'translate-x-0'
+                    <div className="flex flex-col items-start p-4 bg-amber-50/50 rounded-xl border border-amber-200/50">
+                      <div className="flex items-start justify-between w-full mb-4">
+                        <div className="space-y-1 max-w-md text-left">
+                          <h4 className="text-xs font-black text-amber-950 uppercase tracking-wide">Activar Landing Especial de Tres Leches</h4>
+                          <p className="text-[11px] text-amber-900/80 leading-normal">
+                            Al activar esta opción, se mostrará el botón de acceso directo en la barra de navegación principal y el banner promocional gourmet en la sección de inicio.
+                          </p>
+                        </div>
+                        <button
+                          onClick={() => setLocalLandingActive(!localLandingActive)}
+                          className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                            localLandingActive ? 'bg-[#FF9900]' : 'bg-gray-300'
                           }`}
-                        />
-                      </button>
+                        >
+                          <span
+                            className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-sm ring-0 transition duration-200 ease-in-out ${
+                              localLandingActive ? 'translate-x-5' : 'translate-x-0'
+                            }`}
+                          />
+                        </button>
+                      </div>
+                      
+                      <div className="w-full flex justify-end mt-2 pt-4 border-t border-amber-200/30">
+                        <div className="flex items-center gap-4">
+                          {showLandingSaveSuccess && (
+                            <span className="text-xs font-bold text-emerald-600 flex items-center gap-1">
+                              <Check className="w-4 h-4" />
+                              Guardado exitosamente
+                            </span>
+                          )}
+                          <button
+                            onClick={handleSaveLanding}
+                            className="px-6 py-2.5 bg-[#131921] hover:bg-gray-800 text-white text-xs font-bold rounded-lg transition-colors shadow flex items-center gap-2"
+                          >
+                            <Save className="w-4 h-4" />
+                            Guardar Configuración
+                          </button>
+                        </div>
+                      </div>
                     </div>
 
                     <div className="p-4 bg-gray-50 rounded-xl border border-gray-200/60 space-y-3 text-left">
-                      <h4 className="text-xs font-black text-gray-800 uppercase tracking-wide">Vista Previa de Estado</h4>
+                      <h4 className="text-xs font-black text-gray-800 uppercase tracking-wide">Vista Previa de Estado Actual</h4>
                       <div className="flex items-center gap-2">
                         <span className={`w-2.5 h-2.5 rounded-full ${isLandingActive ? 'bg-emerald-500 animate-pulse' : 'bg-rose-500'}`} />
                         <span className="text-xs font-bold">

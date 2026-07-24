@@ -6,7 +6,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { X, Trash2, Plus, Minus, ShoppingCart, MessageCircle, AlertCircle, MapPin, Navigation, Loader2 } from 'lucide-react';
-import { Product, CartItem } from '../types.ts';
+import { Product, CartItem, DiscountCode, LoyaltySettings } from '../types.ts';
 import { dbService } from '../lib/supabase.ts';
 import { CurrencyCode, formatCurrency, CURRENCIES } from '../lib/currency';
 
@@ -100,6 +100,50 @@ export default function CartDrawer({
   const [comments, setComments] = useState('');
   const [paymentMethod, setPaymentMethod] = useState<'pagomovil' | 'efectivo' | 'transferencia'>('pagomovil');
   const [paymentAmountWith, setPaymentAmountWith] = useState('');
+  
+  // Marketing states
+  const [discountInput, setDiscountInput] = useState('');
+  const [appliedDiscount, setAppliedDiscount] = useState<DiscountCode | null>(null);
+  const [discountError, setDiscountError] = useState('');
+  const [loyaltySettings, setLoyaltySettings] = useState<LoyaltySettings | null>(null);
+  const [availableCodes, setAvailableCodes] = useState<DiscountCode[]>([]);
+
+  useEffect(() => {
+    if (isOpen) {
+      dbService.getLoyaltySettings().then(setLoyaltySettings);
+      dbService.getDiscountCodes().then(codes => setAvailableCodes(codes.filter(c => c.is_active)));
+    }
+  }, [isOpen]);
+
+  const handleApplyDiscount = () => {
+    setDiscountError('');
+    if (!discountInput.trim()) return;
+    
+    const code = availableCodes.find(c => c.code.toUpperCase() === discountInput.trim().toUpperCase());
+    if (!code) {
+      setDiscountError('Código de descuento no válido o inactivo.');
+      return;
+    }
+    
+    // Check usage limits and dates
+    if (code.usage_limit_type === 'limited' && code.usage_limit && code.used_count >= code.usage_limit) {
+      setDiscountError('Este código ha alcanzado su límite de usos.');
+      return;
+    }
+    
+    const today = new Date().toISOString().split('T')[0];
+    if (code.start_date && today < code.start_date) {
+      setDiscountError('Este código aún no está activo.');
+      return;
+    }
+    if (code.end_date && today > code.end_date) {
+      setDiscountError('Este código ha expirado.');
+      return;
+    }
+
+    setAppliedDiscount(code);
+    setDiscountError('');
+  };
 
   // Address suggestions and geolocation states
   const [addressSuggestions, setAddressSuggestions] = useState<string[]>([]);
@@ -279,10 +323,45 @@ export default function CartDrawer({
 
   // Calculate totals
   const totalItems = cartItems.reduce((acc, item) => acc + item.quantity, 0);
-  const totalPrice = cartItems.reduce((acc, item) => {
+  const cartSubtotal = cartItems.reduce((acc, item) => {
     const price = item.product.offer_price !== null ? item.product.offer_price : item.product.price;
     return acc + price * item.quantity;
   }, 0);
+
+  let discountAmount = 0;
+  if (appliedDiscount) {
+    if (appliedDiscount.target_type === 'order') {
+      if (!appliedDiscount.min_purchase_amount || cartSubtotal >= appliedDiscount.min_purchase_amount) {
+        if (appliedDiscount.discount_type === 'percentage') {
+          discountAmount = cartSubtotal * (appliedDiscount.discount_value / 100);
+        } else {
+          discountAmount = appliedDiscount.discount_value;
+        }
+      }
+    } else if (appliedDiscount.target_type === 'specific_products' && appliedDiscount.target_products) {
+      cartItems.forEach(item => {
+        if (appliedDiscount.target_products?.includes(item.product.id)) {
+          const itemPrice = item.product.offer_price !== null ? item.product.offer_price : item.product.price;
+          const itemTotal = itemPrice * item.quantity;
+          if (appliedDiscount.discount_type === 'percentage') {
+            discountAmount += itemTotal * (appliedDiscount.discount_value / 100);
+          } else {
+            discountAmount += appliedDiscount.discount_value * item.quantity;
+          }
+        }
+      });
+    }
+  }
+
+  const totalPrice = Math.max(0, cartSubtotal - discountAmount);
+
+  // Calculate loyalty points
+  let loyaltyPoints = 0;
+  if (loyaltySettings?.is_active && loyaltySettings.amount_for_points > 0) {
+    loyaltyPoints = Math.floor(totalPrice / loyaltySettings.amount_for_points) * loyaltySettings.points_per_amount;
+  } else {
+    loyaltyPoints = Math.max(1, Math.floor(totalPrice));
+  }
 
   // Helper to get product image
   const getProductImage = (productId: string) => {
@@ -359,9 +438,6 @@ export default function CartDrawer({
     let createdOrderId = '';
     let orderNumStr = '';
 
-    // Calculate loyalty points: $1 spent = 1 point, minimum of 1
-    const loyaltyPoints = Math.max(1, Math.floor(totalPrice));
-
     // Try to save to Supabase
     try {
       const orderItems = cartItems.map(item => {
@@ -388,7 +464,9 @@ export default function CartDrawer({
         payment_method: paymentMethod,
         payment_amount_with: paymentMethod === 'efectivo' ? parseFloat(paymentAmountWith) : null,
         payment_status: 'pendiente',
-        points: loyaltyPoints
+        points: loyaltyPoints,
+        discount_code: appliedDiscount ? appliedDiscount.code : null,
+        discount_amount: discountAmount > 0 ? discountAmount : null
       };
 
       const created = await dbService.createOrder(orderData);
@@ -397,6 +475,19 @@ export default function CartDrawer({
         localStorage.setItem('copias_bellavista_last_order_id', created.id);
         if (created.order_number) {
           orderNumStr = String(created.order_number).padStart(7, '0');
+        }
+        
+        // Update discount usage count
+        if (appliedDiscount && appliedDiscount.id) {
+           await dbService.saveDiscountCode({
+             id: appliedDiscount.id,
+             used_count: (appliedDiscount.used_count || 0) + 1
+           });
+        }
+        
+        // Add points to customer
+        if (loyaltyPoints > 0) {
+           await dbService.addCustomerPoints(fullPhone, loyaltyPoints);
         }
       }
     } catch (e) {
@@ -453,6 +544,10 @@ export default function CartDrawer({
     });
 
     message += `---------------------------------------\n`;
+    if (appliedDiscount) {
+      message += `🏷️ *Subtotal:* ${formatCurrency(cartSubtotal, activeCurrency, currencyRates)}\n`;
+      message += `🎟️ *Descuento aplicado:* ${appliedDiscount.code} (-${formatCurrency(discountAmount, activeCurrency, currencyRates)})\n`;
+    }
     message += `💰 *TOTAL A PAGAR:* *${formatCurrency(totalPrice, activeCurrency, currencyRates)}*\n`;
     message += `_¡Hola! He armado este pedido desde su catálogo online. ¿Me podrían confirmar la disponibilidad de los productos y los datos de pago? ¡Gracias!_`;
 
@@ -910,6 +1005,50 @@ export default function CartDrawer({
                     <span>Total artículos:</span>
                     <span className="font-bold">{totalItems}</span>
                   </div>
+                  
+                  {/* Discount Code Section */}
+                  <div className="py-2 border-t border-gray-200">
+                    <div className="flex gap-2 mb-1">
+                      <input
+                        type="text"
+                        placeholder="Código de descuento"
+                        value={discountInput}
+                        onChange={(e) => setDiscountInput(e.target.value.toUpperCase())}
+                        className="flex-1 px-2 py-1.5 text-xs border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 uppercase"
+                        disabled={!!appliedDiscount}
+                      />
+                      {appliedDiscount ? (
+                        <button
+                          onClick={() => {
+                            setAppliedDiscount(null);
+                            setDiscountInput('');
+                          }}
+                          className="px-2 py-1.5 bg-gray-200 hover:bg-gray-300 text-gray-700 text-xs font-bold rounded cursor-pointer"
+                        >
+                          Quitar
+                        </button>
+                      ) : (
+                        <button
+                          onClick={handleApplyDiscount}
+                          className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded cursor-pointer transition"
+                        >
+                          Aplicar
+                        </button>
+                      )}
+                    </div>
+                    {discountError && <p className="text-[10px] text-red-500 font-bold">{discountError}</p>}
+                    {appliedDiscount && (
+                       <p className="text-[10px] text-green-600 font-bold">¡Código "{appliedDiscount.code}" aplicado! (-{appliedDiscount.discount_type === 'percentage' ? appliedDiscount.discount_value + '%' : formatCurrency(appliedDiscount.discount_value, activeCurrency, currencyRates)})</p>
+                    )}
+                  </div>
+                  
+                  {appliedDiscount && (
+                    <div className="flex justify-between text-gray-500 text-xs border-t border-gray-200 pt-1.5">
+                      <span>Subtotal:</span>
+                      <span className="font-bold line-through">{formatCurrency(cartSubtotal, activeCurrency, currencyRates)}</span>
+                    </div>
+                  )}
+                  
                   <div className="flex justify-between items-baseline border-t border-gray-200 pt-1.5">
                     <span className="font-bold text-[#0F1111]">Total a Pagar:</span>
                     <span className="text-xl font-black text-[#0F1111]">

@@ -69,7 +69,7 @@ export default function Navbar({
     <header className="sticky top-0 z-50 bg-[#131921] text-white select-none">
       {/* Main Navbar */}
       {!isAdminView && (
-        <div className="max-w-[1480px] mx-auto px-4 md:px-6 h-[60px] flex items-center gap-4">
+        <div className="max-w-[1480px] mx-auto px-4 md:px-6 py-2 md:py-0 min-h-[60px] flex flex-wrap md:flex-nowrap items-center gap-3 md:gap-4">
           {/* Logo */}
           <div className="flex items-center justify-between w-full md:w-auto gap-4">
             <div 
@@ -101,7 +101,7 @@ export default function Navbar({
           </div>
 
           {/* Search Bar */}
-          <div className="hidden md:flex flex-1 relative h-[38px]">
+          <div className="flex flex-1 relative h-[42px] md:h-[38px] w-full md:w-auto mt-2 md:mt-0 order-last md:order-none">
             <input
               type="text"
               value={searchTerm}
@@ -115,8 +115,8 @@ export default function Navbar({
                   scrollToProducts();
                 }
               }}
-              placeholder="Buscar por nombre, marca o categoría..."
-              className="w-full pl-4 pr-24 h-full bg-white text-[#0F1111] placeholder-gray-400 rounded focus:outline-none focus:ring-2 focus:ring-[#FF9900] text-sm font-medium border border-gray-300"
+              placeholder="Buscar productos..."
+              className="w-full pl-4 pr-24 h-full bg-white text-[#0F1111] placeholder-gray-400 rounded focus:outline-none focus:ring-2 focus:ring-[#FF9900] text-sm md:text-base font-medium border border-gray-300 shadow-inner"
               id="input-global-search"
             />
             {onOpenScanner && (
@@ -126,7 +126,7 @@ export default function Navbar({
                 className="absolute right-12 top-0 h-full text-gray-400 hover:text-[#FF9900] px-3 flex items-center justify-center cursor-pointer transition-colors"
                 title="Consultar precio escaneando código de barra o QR"
               >
-                <Camera className="w-5 h-5" />
+                <Camera className="w-5 h-5 md:w-6 md:h-6" />
               </button>
             )}
             <button 
@@ -137,7 +137,7 @@ export default function Navbar({
               }}
               className="absolute right-0 top-0 h-full bg-[#FF9900] hover:bg-[#e68a00] text-[#131921] px-4 rounded-r flex items-center justify-center cursor-pointer transition-colors border-l border-gray-300"
             >
-              <Search className="w-5 h-5 font-bold" />
+              <Search className="w-5 h-5 font-bold md:w-6 md:h-6" />
             </button>
           </div>
 

@@ -2,6 +2,7 @@ import React, { useEffect, useState, useRef } from 'react';
 import { X, Camera, RefreshCw, AlertCircle, Sparkles } from 'lucide-react';
 import { Html5Qrcode } from 'html5-qrcode';
 import { Product } from '../types';
+import { dbService } from '../lib/supabase';
 
 interface BarcodeScannerModalProps {
   onClose: () => void;
@@ -15,6 +16,8 @@ export default function BarcodeScannerModal({
   onProductFound,
 }: BarcodeScannerModalProps) {
   const [error, setError] = useState<string | null>(null);
+  const [isSearching, setIsSearching] = useState(false);
+
   const [cameraPermission, setCameraPermission] = useState<'prompt' | 'granted' | 'denied'>('prompt');
   const [facingMode, setFacingMode] = useState<'environment' | 'user'>('environment');
   const [isScanning, setIsScanning] = useState(false);
@@ -85,14 +88,33 @@ export default function BarcodeScannerModal({
     };
   }, [facingMode]);
 
-  const handleDecodedCode = (code: string) => {
+  const handleDecodedCode = async (code: string) => {
+    if (!code || isSearching) return;
     const trimmedCode = code.trim().toLowerCase();
+    setIsSearching(true);
+    setError(null);
     
     // Attempt to match the decoded text with a product's barcode_qr or SKU
-    const matchedProduct = products.find(p => 
+    let matchedProduct = products.find(p => 
       (p.barcode_qr && p.barcode_qr.trim().toLowerCase() === trimmedCode) ||
       (p.sku && p.sku.trim().toLowerCase() === trimmedCode)
     );
+
+    if (!matchedProduct) {
+      // Try fetching from the database using search
+      try {
+        const dbProducts = await dbService.getProducts();
+        // Find exact match in case the search returns partial matches
+        matchedProduct = dbProducts.find(p => 
+          (p.barcode_qr && p.barcode_qr.trim().toLowerCase() === trimmedCode) ||
+          (p.sku && p.sku.trim().toLowerCase() === trimmedCode)
+        );
+      } catch (err) {
+        console.error("Error fetching product by code:", err);
+      }
+    }
+
+    setIsSearching(false);
 
     if (matchedProduct) {
       // Play a nice beep sound if browser allows
@@ -175,6 +197,14 @@ export default function BarcodeScannerModal({
               </div>
             )}
 
+            {/* Searching DB Loading State */}
+            {isSearching && (
+              <div className="absolute inset-0 flex flex-col items-center justify-center space-y-3 bg-gray-950/80 backdrop-blur-sm p-4 text-center z-10">
+                <RefreshCw className="w-8 h-8 text-[#FF9900] animate-spin" />
+                <span className="text-xs text-gray-400 font-bold">Buscando producto...</span>
+              </div>
+            )}
+
             {/* If camera is not active yet */}
             {!isScanning && !error && (
               <div className="absolute inset-0 flex flex-col items-center justify-center space-y-3 bg-gray-950 p-4 text-center">
@@ -199,14 +229,39 @@ export default function BarcodeScannerModal({
           </div>
 
           {/* Controls */}
-          <div className="flex items-center justify-center gap-3 shrink-0">
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-3 shrink-0 w-full max-w-sm mx-auto">
+            <div className="flex-1 w-full relative flex items-center">
+              <input
+                type="text"
+                placeholder="O ingresa el código manual..."
+                className="w-full bg-gray-900 border border-gray-700 text-white text-xs rounded-xl pl-3 pr-10 py-2.5 focus:outline-none focus:border-[#FF9900]"
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    handleDecodedCode(e.currentTarget.value);
+                  }
+                }}
+                id="manual-barcode-input"
+              />
+              <button
+                type="button"
+                onClick={() => {
+                  const input = document.getElementById('manual-barcode-input') as HTMLInputElement;
+                  if (input && input.value) {
+                    handleDecodedCode(input.value);
+                  }
+                }}
+                className="absolute right-2 p-1.5 text-gray-400 hover:text-[#FF9900] transition cursor-pointer"
+              >
+                <Sparkles className="w-4 h-4" />
+              </button>
+            </div>
             <button
               onClick={toggleCamera}
-              className="px-4 py-2 bg-gray-800 hover:bg-gray-700 text-white font-bold text-xs uppercase tracking-wider rounded-xl cursor-pointer transition flex items-center gap-2 border border-gray-700"
+              className="w-full sm:w-auto px-4 py-2.5 bg-gray-800 hover:bg-gray-700 text-white font-bold text-xs uppercase tracking-wider rounded-xl cursor-pointer transition flex items-center justify-center gap-2 border border-gray-700 whitespace-nowrap"
               title="Cambiar Cámara Trasera / Frontal"
             >
               <RefreshCw className="w-4 h-4 text-[#FF9900]" />
-              <span>Girar Cámara</span>
+              <span>Girar</span>
             </button>
           </div>
 
