@@ -88,6 +88,8 @@ export interface Order {
   payment_status?: string | null;
   points?: number | null;
   order_number?: number;
+  discount_code?: string | null;
+  discount_amount?: number | null;
 }
 
 export interface Provider {
@@ -99,5 +101,46 @@ export interface Provider {
   phone: string;     // Teléfono
   bank_name: string; // Banco
   created_at?: string;
+}
+
+export interface DiscountCode {
+  id?: string;
+  code: string;
+  name: string;
+  discount_type: 'percentage' | 'fixed';
+  discount_value: number;
+  target_type: 'order' | 'specific_products';
+  target_products: string[] | null;
+  start_date: string | null;
+  end_date: string | null;
+  usage_limit_type: 'unlimited' | 'limited';
+  usage_limit: number | null;
+  used_count: number;
+  min_purchase_amount: number | null;
+  customer_eligibility: 'all' | 'new';
+  uses_per_customer: 'unlimited' | 'once';
+  show_in_digital_menu: boolean;
+  is_active: boolean;
+  created_at?: string;
+}
+
+export interface LoyaltySettings {
+  id?: string;
+  is_active: boolean;
+  points_per_amount: number;
+  amount_for_points: number;
+}
+
+export interface LoyaltyReward {
+  id?: string;
+  discount_type: 'percentage' | 'fixed';
+  discount_value: number;
+  points_cost: number;
+  terms_conditions: string;
+}
+
+export interface CustomerPoints {
+  phone_number: string;
+  points: number;
 }
 
