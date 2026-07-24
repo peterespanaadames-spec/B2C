@@ -62,6 +62,7 @@ CREATE TABLE IF NOT EXISTS products (
   featured boolean DEFAULT false,
   active boolean DEFAULT true,
   technical_sheet_url text,
+  barcode_qr text,
   created_at timestamp with time zone DEFAULT now(),
   updated_at timestamp with time zone DEFAULT now()
 );
@@ -77,6 +78,7 @@ CREATE TABLE IF NOT EXISTS product_images (
 -- Actualizaciones de esquema (Ejecutar si ya tenías las tablas creadas previamente)
 ALTER TABLE categories ADD COLUMN IF NOT EXISTS active boolean DEFAULT true;
 ALTER TABLE brands ADD COLUMN IF NOT EXISTS active boolean DEFAULT true;
+ALTER TABLE products ADD COLUMN IF NOT EXISTS barcode_qr text;
 
 -- Habilitar RLS
 ALTER TABLE categories ENABLE ROW LEVEL SECURITY;

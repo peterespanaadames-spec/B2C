@@ -4,7 +4,7 @@
  */
 
 import React, { useState } from 'react';
-import { Search, MapPin, ShieldAlert, Laptop, UserCheck, Settings, RefreshCw, ShoppingCart, Globe } from 'lucide-react';
+import { Search, MapPin, ShieldAlert, Laptop, UserCheck, Settings, RefreshCw, ShoppingCart, Globe, Camera } from 'lucide-react';
 import { dbService, currentSettings } from '../lib/supabase.ts';
 import { CurrencyCode } from '../lib/currency';
 
@@ -28,6 +28,8 @@ interface NavbarProps {
   activeCurrency: CurrencyCode;
   onCurrencyChange: (currency: CurrencyCode) => void;
   currencyRates: Record<CurrencyCode, number>;
+  onOpenTresLechesLanding?: () => void;
+  onOpenScanner?: () => void;
 }
 
 export default function Navbar({
@@ -49,7 +51,9 @@ export default function Navbar({
   onClearFiltersOnly,
   activeCurrency,
   onCurrencyChange,
-  currencyRates
+  currencyRates,
+  onOpenTresLechesLanding,
+  onOpenScanner
 }: NavbarProps) {
 
   const scrollToProducts = () => {
@@ -112,9 +116,19 @@ export default function Navbar({
                 }
               }}
               placeholder="Buscar por nombre, marca o categoría..."
-              className="w-full pl-4 pr-14 h-full bg-white text-[#0F1111] placeholder-gray-400 rounded focus:outline-none focus:ring-2 focus:ring-[#FF9900] text-sm font-medium border border-gray-300"
+              className="w-full pl-4 pr-24 h-full bg-white text-[#0F1111] placeholder-gray-400 rounded focus:outline-none focus:ring-2 focus:ring-[#FF9900] text-sm font-medium border border-gray-300"
               id="input-global-search"
             />
+            {onOpenScanner && (
+              <button
+                type="button"
+                onClick={onOpenScanner}
+                className="absolute right-12 top-0 h-full text-gray-400 hover:text-[#FF9900] px-3 flex items-center justify-center cursor-pointer transition-colors"
+                title="Consultar precio escaneando código de barra o QR"
+              >
+                <Camera className="w-5 h-5" />
+              </button>
+            )}
             <button 
               type="button"
               onClick={() => {
@@ -129,6 +143,19 @@ export default function Navbar({
 
           {/* Action Controls */}
           <div className="flex items-center gap-4 justify-end w-full md:w-auto">
+            {/* Consultar Precio / Scanner Button */}
+            {!isAdminView && onOpenScanner && (
+              <button
+                onClick={onOpenScanner}
+                className="p-2 text-white hover:text-[#FF9900] transition cursor-pointer flex items-center gap-1.5 hover:scale-105 active:scale-95 duration-150 mr-1"
+                id="btn-navbar-scanner-mobile"
+                title="Consultar precio con la cámara"
+              >
+                <Camera className="w-6 h-6 text-white hover:text-[#FF9900] transition" />
+                <span className="hidden sm:inline text-xs font-extrabold uppercase tracking-wider">Consultar Precio</span>
+              </button>
+            )}
+
             {/* Shopping Cart Button */}
             {!isAdminView && (
               <button
@@ -271,6 +298,16 @@ export default function Navbar({
             >
               Postres
             </span>
+            {onOpenTresLechesLanding && (
+              <span 
+                onClick={onOpenTresLechesLanding}
+                className="cursor-pointer transition px-2 py-0.5 rounded border border-amber-500/30 bg-amber-950/20 text-[#FF9900] font-bold hover:bg-amber-950/40 hover:border-amber-500 flex items-center gap-1 shrink-0 animate-pulse"
+                id="nav-sub-tres-leches"
+                title="Ver Landing Especial"
+              >
+                🍰 Especial: Tres Leches Choco Arequipe
+              </span>
+            )}
             <div className="flex-1"></div>
             <div className="flex items-center gap-3">
               {/* Currency Selector */}

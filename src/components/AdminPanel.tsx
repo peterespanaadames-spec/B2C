@@ -10,7 +10,7 @@ import {
   Plus, Edit3, Trash2, Check, AlertTriangle, Printer, Star, Search, Image as ImageIcon, FileText, X, Upload, Download,
   ClipboardList, RefreshCw, Eye, Coins, Truck, Store, Calendar, HelpCircle, Clock, Timer,
   LayoutDashboard, ShieldCheck, Settings, Activity, ArrowRight, Sparkles, TrendingUp, Users,
-  Lock, Unlock, LogOut, Megaphone, ShoppingCart } from 'lucide-react';
+  Lock, Unlock, LogOut, Megaphone, ShoppingCart, Barcode } from 'lucide-react';
 import { Product, Category, Brand, ProductImage, Order, Provider } from '../types.ts';
 import { dbService } from '../lib/supabase.ts';
 import * as XLSX from 'xlsx';
@@ -57,6 +57,8 @@ interface AdminPanelProps {
   onCurrencyChange: (currency: CurrencyCode) => void;
   currencyRates: Record<CurrencyCode, number>;
   onUpdateCurrencyRate: (code: string, rate: number) => Promise<void>;
+  isLandingActive?: boolean;
+  onToggleLandingActive?: (active: boolean) => void;
 }
 
 export default function AdminPanel({
@@ -72,7 +74,9 @@ export default function AdminPanel({
   activeCurrency,
   onCurrencyChange,
   currencyRates,
-  onUpdateCurrencyRate
+  onUpdateCurrencyRate,
+  isLandingActive = true,
+  onToggleLandingActive
 }: AdminPanelProps) {
   const [currentMenu, setCurrentMenu] = useState<'orders' | 'products' | 'sales' | 'audit' | 'settings' | 'caja' | 'clientes' | 'marketing' | 'proveedores' | 'compras' | 'reportes'>(initialMenu || 'orders');
   const [bcvRate, setBcvRate] = useState<number>(721.34);
@@ -228,7 +232,7 @@ export default function AdminPanel({
 
   const [chartView, setChartView] = useState<'days' | 'months'>('days');
   const [activeTab, setActiveTab] = useState<'products' | 'categories' | 'brands' | 'orders'>(initialTab || 'products');
-  const [settingsTab, setSettingsTab] = useState<'business' | 'bcv' | 'roles'>('business');
+  const [settingsTab, setSettingsTab] = useState<'business' | 'bcv' | 'roles' | 'landing'>('business');
 
   useEffect(() => {
     if (initialMenu) {
@@ -759,6 +763,7 @@ export default function AdminPanel({
   const [prodRatingCount, setProdRatingCount] = useState<number>(0);
   const [prodImageUrl, setProdImageUrl] = useState(''); // Comma separated for multiples
   const [prodTechUrl, setProdTechUrl] = useState('');
+  const [prodBarcodeQr, setProdBarcodeQr] = useState('');
 
   // Form states - Categories
   const [catName, setCatName] = useState('');
@@ -795,6 +800,7 @@ export default function AdminPanel({
       setProdRatingStars(prod.rating_stars ?? 5);
       setProdRatingCount(prod.rating_count ?? 0);
       setProdTechUrl(prod.technical_sheet_url || '');
+      setProdBarcodeQr(prod.barcode_qr || '');
 
       // Load images
       const associatedImgs = productImages
@@ -818,6 +824,7 @@ export default function AdminPanel({
       setProdRatingCount(0);
       setProdImageUrl('');
       setProdTechUrl('');
+      setProdBarcodeQr('');
     }
     setShowProductModal(true);
   };
@@ -861,7 +868,8 @@ export default function AdminPanel({
       active: prodActive,
       rating_stars: Number(prodRatingStars),
       rating_count: Number(prodRatingCount),
-      technical_sheet_url: prodTechUrl.trim() || null
+      technical_sheet_url: prodTechUrl.trim() || null,
+      barcode_qr: prodBarcodeQr.trim() || null
     };
 
     try {
@@ -1135,7 +1143,8 @@ export default function AdminPanel({
         Activo: p.active ? 'Si' : 'No',
         Estrellas: p.rating_stars ?? 5,
         Reviews: p.rating_count ?? 0,
-        FichaTecnica: p.technical_sheet_url || ''
+        FichaTecnica: p.technical_sheet_url || '',
+        CodigoBarraQR: p.barcode_qr || ''
       };
     });
     
@@ -1199,7 +1208,8 @@ export default function AdminPanel({
             active: row.Activo === 'Si' || row.Activo === true,
             rating_stars: row.Estrellas !== undefined ? Number(row.Estrellas) : 5,
             rating_count: row.Reviews !== undefined ? Number(row.Reviews) : 0,
-            technical_sheet_url: row.FichaTecnica?.toString() || null
+            technical_sheet_url: row.FichaTecnica?.toString() || null,
+            barcode_qr: row.CodigoBarraQR?.toString() || null
           };
 
           if (row.ID) {
@@ -3018,6 +3028,16 @@ export default function AdminPanel({
                 >
                   Equipos y Roles
                 </button>
+                <button
+                  className={`py-3 px-6 text-xs font-bold uppercase tracking-wider border-b-2 transition-colors ${
+                    settingsTab === 'landing'
+                      ? 'border-[#005da9] text-[#005da9]'
+                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                  }`}
+                  onClick={() => setSettingsTab('landing')}
+                >
+                  🍰 Landing Especial
+                </button>
               </div>
 
               {settingsTab === 'business' && (
@@ -3539,6 +3559,60 @@ export default function AdminPanel({
 
                 </div>
               )}
+
+              {settingsTab === 'landing' && (
+                <div className="bg-white border border-gray-200 rounded-2xl p-5 shadow-xs text-[#131921] text-left">
+                  <div className="flex items-center gap-3 mb-4 pb-3 border-b border-gray-100">
+                    <div className="p-2 bg-amber-50 rounded-xl text-xl">
+                      🍰
+                    </div>
+                    <div>
+                      <h3 className="text-sm font-black text-[#131921] uppercase tracking-tight">Configuración de Landing Especial</h3>
+                      <p className="text-[11px] text-gray-500 font-medium">Controla la visualización del producto estrella y su página promocional.</p>
+                    </div>
+                  </div>
+
+                  <div className="space-y-6">
+                    <div className="flex items-start justify-between p-4 bg-amber-50/50 rounded-xl border border-amber-200/50">
+                      <div className="space-y-1 max-w-md text-left">
+                        <h4 className="text-xs font-black text-amber-950 uppercase tracking-wide">Activar Landing Especial de Tres Leches</h4>
+                        <p className="text-[11px] text-amber-900/80 leading-normal">
+                          Al activar esta opción, se mostrará el botón de acceso directo en la barra de navegación principal y el banner promocional gourmet en la sección de inicio.
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => {
+                          if (onToggleLandingActive) {
+                            onToggleLandingActive(!isLandingActive);
+                          }
+                        }}
+                        className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                          isLandingActive ? 'bg-[#FF9900]' : 'bg-gray-200'
+                        }`}
+                      >
+                        <span
+                          className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-sm ring-0 transition duration-200 ease-in-out ${
+                            isLandingActive ? 'translate-x-5' : 'translate-x-0'
+                          }`}
+                        />
+                      </button>
+                    </div>
+
+                    <div className="p-4 bg-gray-50 rounded-xl border border-gray-200/60 space-y-3 text-left">
+                      <h4 className="text-xs font-black text-gray-800 uppercase tracking-wide">Vista Previa de Estado</h4>
+                      <div className="flex items-center gap-2">
+                        <span className={`w-2.5 h-2.5 rounded-full ${isLandingActive ? 'bg-emerald-500 animate-pulse' : 'bg-rose-500'}`} />
+                        <span className="text-xs font-bold">
+                          {isLandingActive ? 'La Landing Page está ACTIVA y visible para todos los clientes' : 'La Landing Page está DESACTIVADA y oculta'}
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-gray-500 leading-normal">
+                        Esta landing page promociona de manera interactiva la <strong>Torta Tres Leches Choco Arequipe (Porción Individual)</strong>, permitiendo a los usuarios conocer la receta y añadirla directamente al carrito de compras.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           )}
           {currentMenu === 'products' && (
@@ -3785,7 +3859,15 @@ export default function AdminPanel({
                   const brand = brands.find(b => b.id === prod.brand_id)?.name || 'Sin Marca';
                   return (
                     <tr key={prod.id} className="hover:bg-gray-50/50 transition">
-                      <td className="p-3 font-mono font-bold text-gray-500">{prod.sku}</td>
+                      <td className="p-3 font-mono font-bold text-gray-500">
+                        <div>{prod.sku}</div>
+                        {prod.barcode_qr && (
+                          <div className="text-[10px] text-gray-400 font-normal mt-0.5 flex items-center gap-1">
+                            <Barcode className="w-3 h-3 text-gray-400" />
+                            <span>{prod.barcode_qr}</span>
+                          </div>
+                        )}
+                      </td>
                       <td className="p-3 font-bold text-gray-900 truncate max-w-xs">{prod.name}</td>
                       <td className="p-3 font-semibold text-gray-600">{cat}</td>
                       <td className="p-3 font-semibold text-[#007185]">{brand}</td>
@@ -4428,16 +4510,31 @@ export default function AdminPanel({
                 <p className="text-[10px] text-gray-400 mt-1">Sugerencia: puedes usar enlaces directos de Unsplash o cualquier servidor de imágenes.</p>
               </div>
 
-              {/* Technical Sheet PDF link */}
-              <div>
-                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-wide mb-1">Enlace de Ficha Técnica PDF Oficial (Opcional)</label>
-                <input
-                  type="url"
-                  value={prodTechUrl}
-                  onChange={(e) => setProdTechUrl(e.target.value)}
-                  placeholder="https://example.com/technical-specs.pdf"
-                  className="w-full bg-white border border-gray-300 rounded px-3 py-1.5 text-xs focus:ring-1 focus:ring-[#FF9900] focus:outline-none"
-                />
+              {/* Technical Sheet PDF link & Barcode/QR code */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-[10px] font-black text-gray-400 uppercase tracking-wide mb-1">Enlace de Ficha Técnica PDF Oficial (Opcional)</label>
+                  <input
+                    type="url"
+                    value={prodTechUrl}
+                    onChange={(e) => setProdTechUrl(e.target.value)}
+                    placeholder="https://example.com/technical-specs.pdf"
+                    className="w-full bg-white border border-gray-300 rounded px-3 py-1.5 text-xs focus:ring-1 focus:ring-[#FF9900] focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-black text-gray-400 uppercase tracking-wide mb-1 flex items-center gap-1">
+                    <Barcode className="w-3.5 h-3.5 text-gray-500" />
+                    Código de Barras / QR (Opcional)
+                  </label>
+                  <input
+                    type="text"
+                    value={prodBarcodeQr}
+                    onChange={(e) => setProdBarcodeQr(e.target.value)}
+                    placeholder="Ej: 7591234567890 o enlace QR"
+                    className="w-full bg-white border border-gray-300 rounded px-3 py-1.5 text-xs focus:ring-1 focus:ring-[#FF9900] focus:outline-none font-mono"
+                  />
+                </div>
               </div>
 
               {/* Featured & Active checkboxes */}

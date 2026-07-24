@@ -297,11 +297,12 @@ export default function POSModule({
 
   // Search filter
   const filteredProducts = searchTerm.trim() === ''
-    ? products.filter(p => p.active).slice(0, 6) // default quick-select items
+    ? products.filter(p => p.active).slice(0, 12) // default quick-select items
     : products.filter(p => 
         p.active && (
           p.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
           p.sku.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          (p.barcode_qr && p.barcode_qr.toLowerCase().includes(searchTerm.toLowerCase())) ||
           (p.description && p.description.toLowerCase().includes(searchTerm.toLowerCase()))
         )
       );
@@ -856,7 +857,14 @@ export default function POSModule({
                               </span>
                             )}
                           </div>
-                          <span className="text-[9px] text-gray-400 font-mono font-bold block">{p.sku}</span>
+                          <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                            <span className="text-[9px] text-gray-400 font-mono font-bold">{p.sku}</span>
+                            {p.barcode_qr && (
+                              <span className="text-[8px] text-[#005da9] bg-[#005da9]/5 px-1 py-0.2 rounded font-mono font-bold" title={`Código de Barra/QR: ${p.barcode_qr}`}>
+                                📟 {p.barcode_qr}
+                              </span>
+                            )}
+                          </div>
                         </div>
 
                         <div className="flex items-center justify-between mt-2 pt-1.5 border-t border-gray-50">

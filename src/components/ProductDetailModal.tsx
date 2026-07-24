@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { X, MessageCircle, Share2, Clipboard, Printer, CheckCircle2, AlertTriangle, ChevronRight, FileText, Download, ShoppingCart } from 'lucide-react';
+import { X, MessageCircle, Share2, Clipboard, Printer, CheckCircle2, AlertTriangle, ChevronRight, FileText, Download, ShoppingCart, QrCode, Barcode } from 'lucide-react';
 import { Product, Category, Brand, ProductImage } from '../types.ts';
 import { dbService } from '../lib/supabase.ts';
 import { CurrencyCode, CURRENCIES, formatCurrency } from '../lib/currency';
@@ -434,6 +434,17 @@ export default function ProductDetailModal({
                 {product.description}
               </p>
             </div>
+
+            {/* Barcode / QR Code Information */}
+            {product.barcode_qr && (
+              <div className="mb-4 p-2.5 bg-gray-50 border border-gray-150 rounded-lg flex items-center gap-2.5 text-xs text-gray-700">
+                <Barcode className="w-4 h-4 text-gray-500 shrink-0" />
+                <div className="text-left">
+                  <span className="block text-[9px] font-black uppercase text-gray-400 tracking-wider">Código de Barras / QR</span>
+                  <span className="font-mono font-bold text-gray-800">{product.barcode_qr}</span>
+                </div>
+              </div>
+            )}
 
             {/* Ficha técnica PDF & Action buttons container */}
             <div className="space-y-3 md:space-y-4 mt-auto">
