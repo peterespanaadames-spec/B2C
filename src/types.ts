@@ -89,3 +89,14 @@ export interface Order {
   order_number?: number;
 }
 
+export interface Provider {
+  id: string;
+  code: string;
+  rif: string;
+  name: string;      // Razón social
+  type: string;      // Tipo (Natural, Jurídico, etc.)
+  phone: string;     // Teléfono
+  bank_name: string; // Banco
+  created_at?: string;
+}
+
