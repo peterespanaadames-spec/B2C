@@ -4,7 +4,7 @@
  */
 
 import { createClient } from '@supabase/supabase-js';
-import { Category, Brand, Product, ProductImage, SystemSettings, Order } from '../types';
+import { Category, Brand, Product, ProductImage, SystemSettings, Order, Provider } from '../types';
 
 // Read configuration from localStorage or initial environment
 const getInitialSettings = (): SystemSettings => {
@@ -1000,7 +1000,20 @@ export const dbService = {
       mergedMap.set(c.id || c.document || c.code, c);
     });
 
-    return Array.from(mergedMap.values()).sort((a, b) => {
+    return Array.from(mergedMap.values()).map(c => {
+      let phone = c.phone || '';
+      let email = c.email || '';
+      if (phone.includes(' | email:')) {
+        const parts = phone.split(' | email:');
+        phone = parts[0].trim();
+        email = parts[1].trim();
+      }
+      return {
+        ...c,
+        phone,
+        email
+      };
+    }).sort((a, b) => {
       const dateA = new Date(a.created_at || 0).getTime();
       const dateB = new Date(b.created_at || 0).getTime();
       return dateB - dateA;
@@ -1160,6 +1173,123 @@ export const dbService = {
     return true;
   },
 
+  // --- CASH REGISTER (CAJA) OPERATIONS ---
+  async getCashSessions(): Promise<any[]> {
+    try {
+      const saved = localStorage.getItem('copias_bellavista_cash_sessions');
+      if (saved) {
+        return JSON.parse(saved);
+      }
+    } catch (e) {
+      console.error("Error reading cash sessions:", e);
+    }
+    // Seed default session matching Image 1
+    const defaultSessions = [
+      {
+        id: "seed-session-1",
+        apertura: "20/7/2026, 12:26:48 a. m.",
+        cierre: "—",
+        apertura_bs: 10.00,
+        cierre_bs: null,
+        diferencia_bs: null,
+        estado: "abierta",
+        apertura_usd: 0.22,
+        cierre_usd: null,
+        observaciones: "Fondo inicial de apertura"
+      }
+    ];
+    localStorage.setItem('copias_bellavista_cash_sessions', JSON.stringify(defaultSessions));
+    return defaultSessions;
+  },
+
+  async createCashSession(session: any): Promise<any> {
+    try {
+      const sessions = await this.getCashSessions();
+      // Mark any other open sessions as closed just in case
+      const updatedSessions = sessions.map(s => s.estado === 'abierta' ? { ...s, estado: 'cerrada', cierre: new Date().toLocaleString('es-VE') } : s);
+      const newSession = {
+        id: crypto.randomUUID(),
+        apertura: new Date().toLocaleString('es-VE'),
+        cierre: '—',
+        apertura_bs: session.apertura_bs || 0,
+        cierre_bs: null,
+        diferencia_bs: null,
+        estado: 'abierta',
+        apertura_usd: session.apertura_usd || 0,
+        cierre_usd: null,
+        observaciones: session.observaciones || ''
+      };
+      updatedSessions.unshift(newSession); // New session at the top
+      localStorage.setItem('copias_bellavista_cash_sessions', JSON.stringify(updatedSessions));
+      return newSession;
+    } catch (e) {
+      console.error("Error creating cash session:", e);
+      throw e;
+    }
+  },
+
+  async updateCashSession(id: string, updates: any): Promise<any> {
+    try {
+      const sessions = await this.getCashSessions();
+      const updatedSessions = sessions.map(s => {
+        if (s.id === id) {
+          return { ...s, ...updates };
+        }
+        return s;
+      });
+      localStorage.setItem('copias_bellavista_cash_sessions', JSON.stringify(updatedSessions));
+      return updatedSessions.find(s => s.id === id);
+    } catch (e) {
+      console.error("Error updating cash session:", e);
+      throw e;
+    }
+  },
+
+  async getActiveCashSession(): Promise<any | null> {
+    const sessions = await this.getCashSessions();
+    return sessions.find(s => s.estado === 'abierta') || null;
+  },
+
+  async getCashOps(): Promise<any[]> {
+    try {
+      const saved = localStorage.getItem('copias_bellavista_cash_ops');
+      if (saved) {
+        return JSON.parse(saved);
+      }
+    } catch (e) {
+      console.error("Error reading cash operations:", e);
+    }
+    // Seed default operations corresponding to the open seed session
+    const defaultOps = [
+      { id: "1", type: "ingreso", concept: "Apertura de Caja - Fondo Inicial", amount: 0.22, amount_bs: 10.00, time: "12:26 a. m.", session_id: "seed-session-1", created_at: "2026-07-20T00:26:48.000Z" }
+    ];
+    localStorage.setItem('copias_bellavista_cash_ops', JSON.stringify(defaultOps));
+    return defaultOps;
+  },
+
+  async addCashOp(op: any): Promise<any> {
+    try {
+      const ops = await this.getCashOps();
+      const activeSession = await this.getActiveCashSession();
+      const newOp = {
+        id: String(ops.length + 1),
+        type: op.type, // 'ingreso' | 'egreso'
+        concept: op.concept,
+        amount: op.amount || 0, // in USD
+        amount_bs: op.amount_bs || 0, // in Bs
+        time: op.time || new Date().toLocaleTimeString('es-VE', { hour: '2-digit', minute: '2-digit', hour12: true }),
+        session_id: activeSession ? activeSession.id : null,
+        created_at: new Date().toISOString()
+      };
+      ops.push(newOp);
+      localStorage.setItem('copias_bellavista_cash_ops', JSON.stringify(ops));
+      return newOp;
+    } catch (e) {
+      console.error("Error adding cash operation:", e);
+      throw e;
+    }
+  },
+
   async syncClientFromOrder(customerName: string, phoneNumber: string, email: string = ''): Promise<any> {
     try {
       const cleanName = (customerName || '').trim();
@@ -1212,5 +1342,155 @@ export const dbService = {
       console.error('Error in syncClientFromOrder:', e);
       return null;
     }
+  },
+
+  // --- PROVIDER OPERATIONS ---
+  async getProviders(): Promise<Provider[]> {
+    let apiProviders: Provider[] = [];
+    if (supabase) {
+      try {
+        const { data, error } = await supabase
+          .from('providers')
+          .select('*')
+          .order('created_at', { ascending: false });
+        if (!error && data) {
+          apiProviders = data as Provider[];
+        }
+      } catch (e) {
+        console.warn('Error fetching providers from Supabase:', e);
+      }
+    }
+
+    // Load from localStorage
+    let localProviders: Provider[] = [];
+    try {
+      const saved = localStorage.getItem('copias_bellavista_local_providers');
+      if (saved) {
+        localProviders = JSON.parse(saved);
+      }
+    } catch (e) {
+      console.error('Error loading local providers:', e);
+    }
+
+    // Merge lists
+    const mergedMap = new Map<string, Provider>();
+    localProviders.forEach(p => {
+      mergedMap.set(p.id || p.rif || p.code, p);
+    });
+    apiProviders.forEach(p => {
+      mergedMap.set(p.id || p.rif || p.code, p);
+    });
+
+    return Array.from(mergedMap.values()).sort((a, b) => {
+      const dateA = new Date(a.created_at || 0).getTime();
+      const dateB = new Date(b.created_at || 0).getTime();
+      return dateB - dateA;
+    });
+  },
+
+  async createProvider(provider: Omit<Provider, 'id'> & { id?: string }): Promise<Provider> {
+    // Generate sequential code
+    let calculatedCode = provider.code;
+    if (!calculatedCode) {
+      try {
+        const allProviders = await this.getProviders();
+        calculatedCode = `PROV-${1001 + allProviders.length}`;
+      } catch (e) {
+        calculatedCode = `PROV-${Math.floor(Math.random() * 9000) + 1000}`;
+      }
+    }
+
+    const newProvider: Provider = {
+      id: provider.id || (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `local-${Math.floor(Math.random() * 1000000)}`),
+      code: calculatedCode,
+      rif: provider.rif,
+      name: provider.name,
+      type: provider.type || 'Jurídico',
+      phone: provider.phone,
+      bank_name: provider.bank_name || '',
+      created_at: new Date().toISOString()
+    };
+
+    if (supabase) {
+      try {
+        const { data, error } = await supabase.from('providers').insert([newProvider]).select();
+        if (!error && data && data[0]) {
+          return data[0] as Provider;
+        } else {
+          console.warn("Supabase insert provider failed (RLS/schema). Using local fallback:", error);
+        }
+      } catch (e) {
+        console.warn("Supabase insert provider error. Using local fallback:", e);
+      }
+    }
+
+    try {
+      const saved = localStorage.getItem('copias_bellavista_local_providers');
+      const localProviders = saved ? JSON.parse(saved) : [];
+      localProviders.push(newProvider);
+      localStorage.setItem('copias_bellavista_local_providers', JSON.stringify(localProviders));
+    } catch (e) {
+      console.error("Failed to save provider to localStorage:", e);
+    }
+
+    return newProvider;
+  },
+
+  async updateProvider(id: string, updates: Partial<Provider>): Promise<Provider | null> {
+    if (supabase && id && !String(id).startsWith('local-')) {
+      try {
+        const { data, error } = await supabase
+          .from('providers')
+          .update(updates)
+          .eq('id', id)
+          .select();
+        if (!error && data && data[0]) {
+          return data[0] as Provider;
+        }
+      } catch (e) {
+        console.warn("Supabase update provider error. Updating local copy instead:", e);
+      }
+    }
+
+    try {
+      const saved = localStorage.getItem('copias_bellavista_local_providers');
+      if (saved) {
+        let localProviders = JSON.parse(saved);
+        localProviders = localProviders.map((p: any) => {
+          if (p.id === id) {
+            return { ...p, ...updates };
+          }
+          return p;
+        });
+        localStorage.setItem('copias_bellavista_local_providers', JSON.stringify(localProviders));
+        return localProviders.find((p: any) => p.id === id) || null;
+      }
+    } catch (e) {
+      console.error("Failed to update provider in localStorage:", e);
+    }
+    return null;
+  },
+
+  async deleteProvider(id: string): Promise<boolean> {
+    if (supabase && id && !String(id).startsWith('local-')) {
+      try {
+        const { error } = await supabase.from('providers').delete().eq('id', id);
+        if (!error) return true;
+      } catch (e) {
+        console.warn("Supabase delete provider failed. Deleting from local copy:", e);
+      }
+    }
+
+    try {
+      const saved = localStorage.getItem('copias_bellavista_local_providers');
+      if (saved) {
+        let localProviders = JSON.parse(saved);
+        localProviders = localProviders.filter((p: any) => p.id !== id);
+        localStorage.setItem('copias_bellavista_local_providers', JSON.stringify(localProviders));
+      }
+    } catch (e) {
+      console.error("Failed to delete provider from localStorage:", e);
+    }
+    return true;
   }
 };
