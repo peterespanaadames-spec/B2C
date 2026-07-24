@@ -1262,6 +1262,7 @@ export default function AdminPanel({
   const filteredProducts = products.filter(p => 
     p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
     p.sku.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    (p.barcode_qr && p.barcode_qr.toLowerCase().includes(searchQuery.toLowerCase())) ||
     categories.find(c => c.id === p.category_id)?.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
     brands.find(b => b.id === p.brand_id)?.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
