@@ -4,7 +4,7 @@
  */
 
 import { createClient } from '@supabase/supabase-js';
-import { Category, Brand, Product, ProductImage, SystemSettings, Order, Provider } from '../types';
+import { Category, Brand, Product, ProductImage, SystemSettings, Order, Provider, DiscountCode, LoyaltySettings, LoyaltyReward } from '../types';
 
 // Read configuration from localStorage or initial environment
 const getInitialSettings = (): SystemSettings => {
@@ -223,7 +223,9 @@ export const dbService = {
 
       const orParts = [
         `name.ilike.%${params.searchTerm}%`,
-        `description.ilike.%${params.searchTerm}%`
+        `description.ilike.%${params.searchTerm}%`,
+        `barcode_qr.ilike.%${params.searchTerm}%`,
+        `sku.ilike.%${params.searchTerm}%`
       ];
 
       if (matchedCategoryIds.length > 0) {
@@ -475,6 +477,15 @@ export const dbService = {
   async getOrder(id: string): Promise<Order | null> {
     if (!supabase) throw new Error('Supabase is not configured');
     
+    // Validate that id is a valid UUID, or handle 'temp-last-order' gracefully
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+    if (!uuidRegex.test(id)) {
+      if (id !== 'temp-last-order') {
+        console.warn(`Invalid UUID format for order ID: ${id}`);
+      }
+      return null;
+    }
+
     const { data, error } = await supabase.from('orders').select('*').eq('id', id).maybeSingle();
     if (error) {
       console.error("Error fetching order by ID:", error);
@@ -1368,8 +1379,139 @@ export const dbService = {
     }
   },
 
+  // --- MARKETING OPERATIONS ---
+  async getDiscountCodes(): Promise<DiscountCode[]> {
+    if (!supabase) return [];
+    try {
+      const { data, error } = await supabase.from('discount_codes').select('*').order('created_at', { ascending: false });
+      if (error) {
+        console.warn('Could not fetch discount codes. Table might not exist yet.', error.message);
+        return [];
+      }
+      return data as DiscountCode[];
+    } catch (err) {
+      return [];
+    }
+  }
+
+, async saveDiscountCode(code: Partial<DiscountCode>): Promise<DiscountCode> {
+    if (!supabase) throw new Error("No supabase instance");
+    
+    if (code.id) {
+      const { data, error } = await supabase.from('discount_codes').update(code).eq('id', code.id).select().single();
+      if (error) throw error;
+      return data;
+    } else {
+      const { data, error } = await supabase.from('discount_codes').insert(code).select().single();
+      if (error) throw error;
+      return data;
+    }
+  }
+
+, async deleteDiscountCode(id: string): Promise<void> {
+    if (!supabase) throw new Error("No supabase instance");
+    const { error } = await supabase.from('discount_codes').delete().eq('id', id);
+    if (error) throw error;
+  }
+
+, async getLoyaltySettings(): Promise<LoyaltySettings | null> {
+    if (!supabase) return null;
+    try {
+      const { data, error } = await supabase.from('loyalty_settings').select('*').limit(1).single();
+      if (error) {
+        console.warn('Could not fetch loyalty settings. Table might not exist yet.', error.message);
+        return null;
+      }
+      return data as LoyaltySettings;
+    } catch (err) {
+      return null;
+    }
+  }
+
+, async saveLoyaltySettings(settings: Partial<LoyaltySettings>): Promise<LoyaltySettings> {
+    if (!supabase) throw new Error("No supabase instance");
+    
+    if (settings.id) {
+      const { data, error } = await supabase.from('loyalty_settings').update(settings).eq('id', settings.id).select().single();
+      if (error) throw error;
+      return data;
+    } else {
+      const { data, error } = await supabase.from('loyalty_settings').insert(settings).select().single();
+      if (error) throw error;
+      return data;
+    }
+  }
+
+, async getLoyaltyRewards(): Promise<LoyaltyReward[]> {
+    if (!supabase) return [];
+    try {
+      const { data, error } = await supabase.from('loyalty_rewards').select('*').order('points_cost', { ascending: true });
+      if (error) return [];
+      return data as LoyaltyReward[];
+    } catch (err) {
+      return [];
+    }
+  }
+
+, async saveLoyaltyReward(reward: Partial<LoyaltyReward>): Promise<LoyaltyReward> {
+    if (!supabase) throw new Error("No supabase instance");
+    
+    if (reward.id) {
+      const { data, error } = await supabase.from('loyalty_rewards').update(reward).eq('id', reward.id).select().single();
+      if (error) throw error;
+      return data;
+    } else {
+      const { data, error } = await supabase.from('loyalty_rewards').insert(reward).select().single();
+      if (error) throw error;
+      return data;
+    }
+  }
+
+, async deleteLoyaltyReward(id: string): Promise<void> {
+    if (!supabase) throw new Error("No supabase instance");
+    const { error } = await supabase.from('loyalty_rewards').delete().eq('id', id);
+    if (error) throw error;
+  }
+  
+, async getCustomerPoints(phoneNumber: string): Promise<number> {
+    if (!supabase) return 0;
+    try {
+      const { data, error } = await supabase.from('customer_points').select('points').eq('phone_number', phoneNumber).single();
+      if (error) return 0;
+      return data?.points || 0;
+    } catch (err) {
+      return 0;
+    }
+  }
+
+, async addCustomerPoints(phoneNumber: string, pointsToAdd: number): Promise<void> {
+    if (!supabase) return;
+    try {
+      const { data: existing } = await supabase.from('customer_points').select('*').eq('phone_number', phoneNumber).single();
+      if (existing) {
+        await supabase.from('customer_points').update({ points: existing.points + pointsToAdd }).eq('phone_number', phoneNumber);
+      } else {
+        await supabase.from('customer_points').insert({ phone_number: phoneNumber, points: pointsToAdd });
+      }
+    } catch (e) {
+      console.warn('Could not add points', e);
+    }
+  }
+
+, async subtractCustomerPoints(phoneNumber: string, pointsToSubtract: number): Promise<void> {
+    if (!supabase) return;
+    try {
+      const { data: existing } = await supabase.from('customer_points').select('*').eq('phone_number', phoneNumber).single();
+      if (existing && existing.points >= pointsToSubtract) {
+        await supabase.from('customer_points').update({ points: existing.points - pointsToSubtract }).eq('phone_number', phoneNumber);
+      }
+    } catch (e) {
+      console.warn('Could not subtract points', e);
+    }
+  }
+
   // --- PROVIDER OPERATIONS ---
-  async getProviders(): Promise<Provider[]> {
+, async getProviders(): Promise<Provider[]> {
     let apiProviders: Provider[] = [];
     if (supabase) {
       try {
